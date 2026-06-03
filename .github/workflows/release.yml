@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup build environment
+        uses: start9labs/shared-workflows/.github/actions/setup-build-env@master
+
+      - name: Install developer signing key
+        run: |
+          mkdir -p ~/.startos
+          printf '%s' "${{ secrets.DEV_KEY }}" > ~/.startos/developer.key.pem
+          chmod 600 ~/.startos/developer.key.pem
+
+      - name: Build .s9pk packages
+        run: |
+          RUST_LOG=debug RUST_BACKTRACE=1 make
+          echo
+          echo "SHA256SUMs:"
+          sha256sum *.s9pk
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FIRST_S9PK=$(ls *.s9pk | head -1)
+          NOTES=$(start-cli s9pk inspect "$FIRST_S9PK" manifest | jq -r '.releaseNotes | if type == "object" then (.en_US // first(.[]) // "") else . end')
+
+          {
+            echo "## Release Notes"
+            echo
+            echo "$NOTES"
+            echo
+            echo "## SHA256 Hashes"
+            echo '```'
+            sha256sum *.s9pk
+            echo '```'
+          } > NOTES.md
+
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file NOTES.md \
+            ./*.s9pk
