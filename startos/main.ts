@@ -4,14 +4,20 @@ import { i18n } from './i18n'
 import { sdk } from './sdk'
 import { authUsername, uiPort } from './utils'
 
-// When File Browser is the chosen destination, downloads go into this folder
-// inside File Browser's data volume (created + chmod 777'd by the setup oneshot
-// so the cross-package, idmapped write is permitted). This is the same approach
-// MeTube uses — point the download path straight at the mount, rather than
-// trying to expose it as a sub-folder of /downloads (which YTPTube's
-// calc_download_path confinement rejects).
-const FB_MOUNT = '/mnt/filebrowser'
-const FB_DOWNLOAD_PATH = `${FB_MOUNT}/ytptube-downloads`
+// When File Browser is the chosen destination, downloads land in a
+// 'ytptube-downloads' folder at the top level of File Browser's data volume.
+// Only that folder is mounted (a subpath mount, auto-created by the host on
+// first use), so YTPTube cannot touch the rest of File Browser's files. No
+// idmap is needed on the mount: StartOS applies the same base id-mapping to
+// every volume mount, so on-disk uids are shared 1:1 across services — and
+// YTPTube's `app` and File Browser's `user` are both uid 1000 in their
+// images, so files either side writes are natively owned by the other. If
+// either image ever changes its uid, an `idmap` on the mount below
+// ([{ fromId: <filebrowser uid>, toId: <ytptube uid> }]) is the remedy.
+// The mountpoint keeps the container-visible path from before 2.5.6:1 (when
+// the whole volume was mounted at /mnt/filebrowser), so any absolute paths
+// YTPTube persisted — history entries, user-set templates — stay valid.
+const FB_DOWNLOAD_PATH = '/mnt/filebrowser/ytptube-downloads'
 
 export const main = sdk.setupMain(async ({ effects }) => {
   console.info(i18n('Starting YTPTube!'))
@@ -43,8 +49,8 @@ export const main = sdk.setupMain(async ({ effects }) => {
     mounts = mounts.mountDependency<typeof filebrowserManifest>({
       dependencyId: 'filebrowser',
       volumeId: 'data',
-      subpath: null,
-      mountpoint: FB_MOUNT,
+      subpath: 'ytptube-downloads',
+      mountpoint: FB_DOWNLOAD_PATH,
       readonly: false,
     })
   }
@@ -57,12 +63,13 @@ export const main = sdk.setupMain(async ({ effects }) => {
   )
 
   // Setup oneshot (runs as root before the daemon). YTPTube's image runs as the
-  // unprivileged `app` user and its entrypoint aborts if it cannot write to its
-  // config/download paths. `chmod 777` on the File Browser sub-folder makes the
-  // cross-userns write work without matching uids (the idmapping means File
-  // Browser's `user` and YTPTube's `app` do not line up on disk).
+  // unprivileged `app` user and its entrypoint aborts unless its config/download
+  // paths are writable. The File Browser folder is created root-owned by the
+  // host on first mount (and pre-2.5.6:1 installs left it root-owned and
+  // world-writable), so hand it to `app` — File Browser's `user` is the same
+  // uid, so both services own it. The chmod strips the legacy 777 bit.
   const setupScript = filebrowser
-    ? `chown -R app:app /config; mkdir -p '${FB_DOWNLOAD_PATH}' && chmod 777 '${FB_DOWNLOAD_PATH}'`
+    ? `chown -R app:app /config && chown app:app '${FB_DOWNLOAD_PATH}' && chmod 755 '${FB_DOWNLOAD_PATH}'`
     : 'chown -R app:app /config /downloads'
 
   return sdk.Daemons.of(effects)

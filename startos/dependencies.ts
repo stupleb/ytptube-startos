@@ -10,6 +10,9 @@ export const setDependencies = sdk.setupDependencies(async ({ effects }) => {
 
   // Only require File Browser when it's the chosen download location. `exists`
   // (not `running`) — we only need its data volume present to write into.
+  // The no-idmap ownership scheme in main.ts assumes File Browser's user is
+  // uid 1000; verified against the filebrowser/filebrowser Dockerfile
+  // (ENV UID=1000) for every image this range admits (v2.63.2 onward).
   if (downloadDestination === 'filebrowser') {
     deps['filebrowser'] = {
       kind: 'exists',
