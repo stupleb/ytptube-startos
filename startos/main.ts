@@ -98,13 +98,39 @@ export const main = sdk.setupMain(async ({ effects }) => {
             : {}),
         },
       },
+      // Don't report ready until the config endpoint returns 200. YTPTube opens
+      // its HTTP port BEFORE its SQLite connection finishes initializing (the DB
+      // connects asynchronously on the STARTED event), so a port-only check goes
+      // green too early — the user opens the UI and hits "Failed to load
+      // configuration" during that window. Hitting a DB-backed endpoint (with
+      // auth, since we enable it) gates readiness on the DB actually being up.
       ready: {
         display: i18n('Web Interface'),
-        fn: () =>
-          sdk.healthCheck.checkPortListening(effects, uiPort, {
-            successMessage: i18n('The web interface is ready'),
-            errorMessage: i18n('The web interface is not ready'),
-          }),
+        gracePeriod: 60_000,
+        fn: async () => {
+          const ok = { result: 'success', message: i18n('The web interface is ready') } as const
+          const notOk = { result: 'failure', message: i18n('The web interface is not ready') } as const
+          const headers: Record<string, string> = adminPassword
+            ? {
+                Authorization:
+                  'Basic ' +
+                  Buffer.from(`${authUsername}:${adminPassword}`).toString('base64'),
+              }
+            : {}
+          const controller = new AbortController()
+          const timer = setTimeout(() => controller.abort(), 5_000)
+          try {
+            const res = await fetch(
+              `http://localhost:${uiPort}/api/system/configuration`,
+              { headers, signal: controller.signal },
+            )
+            return res.ok ? ok : notOk
+          } catch {
+            return notOk
+          } finally {
+            clearTimeout(timer)
+          }
+        },
       },
       requires: ['setup'],
     })
