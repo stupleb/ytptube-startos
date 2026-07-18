@@ -49,7 +49,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
     })
   }
 
-  const sub = await sdk.SubContainer.of(
+  const sub = sdk.SubContainer.of(
     effects,
     { imageId: 'ytptube' },
     mounts,
