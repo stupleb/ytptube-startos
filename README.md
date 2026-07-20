@@ -52,7 +52,7 @@ YTPTube is a self-hosted web interface for [yt-dlp](https://github.com/yt-dlp/yt
 
 Temporary/in-progress files use the container's `/tmp` (`YTP_TEMP_PATH`), which is ephemeral.
 
-When the download destination is **File Browser** (see [Configuration](#configuration-management)), File Browser's `data` volume is mounted read-write at `/mnt/filebrowser`, `YTP_DOWNLOAD_PATH` (and `YTP_TEMP_PATH`) point at `/mnt/filebrowser/ytptube-downloads`, and the local `downloads` volume is left idle. The setup oneshot `chmod 777`s that folder so the cross-package (idmapped) write is permitted regardless of each service's user.
+When the download destination is **File Browser** (see [Configuration](#configuration-management)), a `ytptube-downloads` folder at the top level of File Browser's `data` volume is mounted read-write at `/mnt/filebrowser/ytptube-downloads` (a subpath mount — since 2.5.6:1 YTPTube cannot access the rest of File Browser's files, but the container-visible path is unchanged from earlier releases), `YTP_DOWNLOAD_PATH` (and `YTP_TEMP_PATH`) point at it, and the local `downloads` volume is left idle. No ownership remapping is needed: StartOS mounts every volume in one shared id space, and YTPTube's `app` and File Browser's `user` are both uid 1000, so each service natively owns the files the other writes. The setup oneshot chowns the folder to `app` (the host creates it root-owned on first mount) and chmods it `755` — replacing the world-writable `chmod 777` scheme used before 2.5.6:1, which papered over the setup oneshot creating the folder root-owned and never chowning it (file ownership across the two services already aligned).
 
 ---
 
@@ -124,7 +124,14 @@ The in-app terminal (`YTP_CONSOLE_ENABLED`) is intentionally left disabled — i
 
 | Check         | Method                | Messages                                                                        |
 | ------------- | --------------------- | ------------------------------------------------------------------------------- |
-| Web Interface | Port listening (8081) | Success: "The web interface is ready" / Error: "The web interface is not ready" |
+| Web Interface | Authenticated `GET /api/system/configuration` on 8081, 5s timeout, 60s grace period | Success: "The web interface is ready" / Error: "The web interface is not ready" |
+
+The check deliberately hits a database-backed endpoint rather than merely testing
+that the port is open: YTPTube binds its HTTP port *before* its SQLite connection
+finishes initializing (the DB connects asynchronously on the `STARTED` event), so a
+port-only check goes green early enough that the user can open the UI and hit
+"Failed to load configuration". The request carries Basic auth because this package
+enables authentication by default.
 
 ---
 
@@ -169,7 +176,7 @@ volumes:
   startos: (store.json, not mounted)
   main: /config
   downloads: /downloads
-  filebrowser_data: /mnt/filebrowser # only when destination=filebrowser; downloads go to ./ytptube-downloads
+  filebrowser_data: /mnt/filebrowser/ytptube-downloads # only when destination=filebrowser; subpath mount of ytptube-downloads/ only
 ports:
   ui: 8081
 dependencies:
