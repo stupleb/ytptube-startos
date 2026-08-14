@@ -13,7 +13,7 @@ export const manifest = setupManifest({
   volumes: ['startos', 'main', 'downloads'],
   images: {
     ytptube: {
-      source: { dockerTag: 'ghcr.io/arabcoders/ytptube:v2.5.6' },
+      source: { dockerTag: 'ghcr.io/arabcoders/ytptube:v2.6.7' },
       arch: ['x86_64', 'aarch64'],
     },
   },
