@@ -16,9 +16,15 @@ YTPTube is a self-hosted web interface for [yt-dlp](https://github.com/yt-dlp/yt
 This package turns on YTPTube's login (which upstream leaves off). On install, a random **admin** password is generated for you.
 
 1. Run the **Reset Admin Password** action (a task on the service page also links to it). It generates a fresh password and shows it, with the username (`admin`).
-2. Use them to sign in to the Web UI.
+2. Use them to sign in on YTPTube's sign-in page.
 
-Run **Reset Admin Password** again any time to roll a new one — the service restarts with the new password.
+Run **Reset Admin Password** again any time to roll a new one. The new password works immediately, and everyone signed in is signed out.
+
+## Managing your account
+
+Once you're signed in, YTPTube handles your account itself — from its settings you can change your username and password, see which devices are signed in and sign them out individually, and create API keys for other tools.
+
+If you change your password inside YTPTube, that becomes your password: the one StartOS last showed you no longer works. Should you lose it, **Reset Admin Password** always gets you back in.
 
 ## Getting set up
 

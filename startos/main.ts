@@ -115,13 +115,21 @@ export const main = sdk.setupMain(async ({ effects }) => {
         display: i18n('Web Interface'),
         gracePeriod: 60_000,
         fn: async () => {
-          const ok = { result: 'success', message: i18n('The web interface is ready') } as const
-          const notOk = { result: 'failure', message: i18n('The web interface is not ready') } as const
+          const ok = {
+            result: 'success',
+            message: i18n('The web interface is ready'),
+          } as const
+          const notOk = {
+            result: 'failure',
+            message: i18n('The web interface is not ready'),
+          } as const
           const headers: Record<string, string> = adminPassword
             ? {
                 Authorization:
                   'Basic ' +
-                  Buffer.from(`${authUsername}:${adminPassword}`).toString('base64'),
+                  Buffer.from(`${authUsername}:${adminPassword}`).toString(
+                    'base64',
+                  ),
               }
             : {}
           const controller = new AbortController()

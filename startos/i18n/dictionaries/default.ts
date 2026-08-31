@@ -23,7 +23,7 @@ const dict = {
   'Reset Admin Password': 12,
   'Generate a new random admin password and display it': 13,
   'YTPTube Login Credentials': 14,
-  'Your new admin password. The service restarts to apply it.': 15,
+  'Your new admin password. Any signed-in browser is now signed out.': 15,
   Username: 16,
   Password: 17,
   'Set your YTPTube admin password': 18,
