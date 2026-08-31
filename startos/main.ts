@@ -105,12 +105,18 @@ export const main = sdk.setupMain(async ({ effects }) => {
             : {}),
         },
       },
-      // Don't report ready until the config endpoint returns 200. YTPTube opens
-      // its HTTP port BEFORE its SQLite connection finishes initializing (the DB
-      // connects asynchronously on the STARTED event), so a port-only check goes
-      // green too early — the user opens the UI and hits "Failed to load
-      // configuration" during that window. Hitting a DB-backed endpoint (with
-      // auth, since we enable it) gates readiness on the DB actually being up.
+      // Don't report ready until a database-backed endpoint answers. YTPTube
+      // opens its HTTP port BEFORE its SQLite connection finishes initializing
+      // (the DB connects asynchronously on the STARTED event), so a port-only
+      // check goes green too early — the user opens the UI and hits "Failed to
+      // load configuration" during that window.
+      //
+      // `/api/auth/status` is public and counts rows in the users table, so it
+      // proves the database is up without sending credentials. That matters
+      // since upstream 2.7.0: the account lives in the database and the user
+      // can change their own username and password in the app, which would
+      // leave any credentialed probe of ours authenticating with stale details
+      // and reporting a healthy service as broken.
       ready: {
         display: i18n('Web Interface'),
         gracePeriod: 60_000,
@@ -123,21 +129,12 @@ export const main = sdk.setupMain(async ({ effects }) => {
             result: 'failure',
             message: i18n('The web interface is not ready'),
           } as const
-          const headers: Record<string, string> = adminPassword
-            ? {
-                Authorization:
-                  'Basic ' +
-                  Buffer.from(`${authUsername}:${adminPassword}`).toString(
-                    'base64',
-                  ),
-              }
-            : {}
           const controller = new AbortController()
           const timer = setTimeout(() => controller.abort(), 5_000)
           try {
             const res = await fetch(
-              `http://localhost:${uiPort}/api/system/configuration`,
-              { headers, signal: controller.signal },
+              `http://localhost:${uiPort}/api/auth/status`,
+              { signal: controller.signal },
             )
             return res.ok ? ok : notOk
           } catch {

@@ -126,14 +126,17 @@ The in-app terminal (`YTP_CONSOLE_ENABLED`) is intentionally left disabled — i
 
 | Check         | Method                | Messages                                                                        |
 | ------------- | --------------------- | ------------------------------------------------------------------------------- |
-| Web Interface | Authenticated `GET /api/system/configuration` on 8081, 5s timeout, 60s grace period | Success: "The web interface is ready" / Error: "The web interface is not ready" |
+| Web Interface | `GET /api/auth/status` on 8081, no credentials, 5s timeout, 60s grace period | Success: "The web interface is ready" / Error: "The web interface is not ready" |
 
 The check deliberately hits a database-backed endpoint rather than merely testing
 that the port is open: YTPTube binds its HTTP port *before* its SQLite connection
 finishes initializing (the DB connects asynchronously on the `STARTED` event), so a
 port-only check goes green early enough that the user can open the UI and hit
-"Failed to load configuration". The request carries Basic auth because this package
-enables authentication by default.
+"Failed to load configuration". `/api/auth/status` is public and counts rows in the
+`users` table, so it proves the database is up **without sending credentials** —
+which matters because the user can change their own username and password inside
+YTPTube, and a credentialed probe would then authenticate with stale details and
+report a healthy service as broken.
 
 ---
 
