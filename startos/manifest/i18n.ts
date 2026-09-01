@@ -22,7 +22,8 @@ export const long = {
 // Optional dependency: when chosen as the download destination, downloads are
 // saved into File Browser's volume instead of YTPTube's local one.
 export const filebrowserDescription = {
-  en_US: 'Optionally save downloads into File Browser instead of local storage.',
+  en_US:
+    'Optionally save downloads into File Browser instead of local storage.',
   es_ES:
     'Opcionalmente, guarda las descargas en File Browser en lugar del almacenamiento local.',
   de_DE:

@@ -60,6 +60,8 @@ When the download destination is **File Browser** (see [Configuration](#configur
 
 Unlike upstream (which ships with no authentication), this package **enables auth by default**: a random admin password is generated on install and injected as `YTP_AUTH_PASSWORD`, so the web UI requires a login from first boot. An **important-priority task** points you at the `Reset Admin Password` action, which generates and shows a fresh password (username `admin`). The `/config` and `/downloads` volumes are created empty on first start.
 
+Since upstream 2.7.0 YTPTube keeps accounts in its own database (`users`, `sessions`, `api_keys` in `ytptube.db`) and seeds one from `YTP_AUTH_USERNAME`/`YTP_AUTH_PASSWORD` **only while the users table is empty**. So the env vars establish the first account and are ignored from then on — changing them does not change the login. Anything that rotates the password must act on the database instead; see [Actions](#actions-startos-ui).
+
 ---
 
 ## Configuration Management
@@ -73,7 +75,7 @@ This package overrides two upstream defaults via environment variables:
 | `YTP_BROWSER_CONTROL_ENABLED`  | `true`  | Enables rename / delete / move / create-directory controls in YTPTube's built-in file manager (off upstream). |
 | `YTP_CHECK_FOR_UPDATES`        | `false` | StartOS manages package updates, so the in-app update banner is suppressed (and the outbound check avoided). |
 
-It also enables **authentication**: `YTP_AUTH_USERNAME` (`admin`) and `YTP_AUTH_PASSWORD` (generated on install, see [First-Run Flow](#installation-and-first-run-flow)) are injected from the StartOS-managed `store.json`. Roll a new password any time with the `Reset Admin Password` action.
+It also enables **authentication**: `YTP_AUTH_USERNAME` (`admin`) and `YTP_AUTH_PASSWORD` (generated on install, see [First-Run Flow](#installation-and-first-run-flow)) are injected from the StartOS-managed `store.json` to seed the initial account. Roll a new password any time with the `Reset Admin Password` action. Users can also manage the account from inside YTPTube — change the username and password, review and revoke active sessions, and issue API keys.
 
 The in-app terminal (`YTP_CONSOLE_ENABLED`) is intentionally left disabled — it executes commands and is a remote-execution surface. yt-dlp's own auto-update (`YTP_YTDLP_AUTO_UPDATE`) remains at the upstream default (on), which is why the container makes an outbound call on each start.
 
@@ -100,7 +102,7 @@ The in-app terminal (`YTP_CONSOLE_ENABLED`) is intentionally left disabled — i
 
 | Action                        | ID                      | Purpose                                                                 |
 | ----------------------------- | ----------------------- | ---------------------------------------------------------------------- |
-| Reset Admin Password          | `reset-admin-password`  | Generates a new random admin password and displays it (username `admin`). Any status. |
+| Reset Admin Password          | `reset-admin-password`  | Generates a new random admin password, applies it to YTPTube's account database, and displays it (username `admin`). Revokes every active session, so signed-in browsers are signed out; API keys are left alone. Any status. |
 | Select Download Destination   | `download-destination`  | Choose where downloads are saved: Local Storage (default) or File Browser. Single choice; any status. |
 
 ---
@@ -124,14 +126,17 @@ The in-app terminal (`YTP_CONSOLE_ENABLED`) is intentionally left disabled — i
 
 | Check         | Method                | Messages                                                                        |
 | ------------- | --------------------- | ------------------------------------------------------------------------------- |
-| Web Interface | Authenticated `GET /api/system/configuration` on 8081, 5s timeout, 60s grace period | Success: "The web interface is ready" / Error: "The web interface is not ready" |
+| Web Interface | `GET /api/auth/status` on 8081, no credentials, 5s timeout, 60s grace period | Success: "The web interface is ready" / Error: "The web interface is not ready" |
 
 The check deliberately hits a database-backed endpoint rather than merely testing
 that the port is open: YTPTube binds its HTTP port *before* its SQLite connection
 finishes initializing (the DB connects asynchronously on the `STARTED` event), so a
 port-only check goes green early enough that the user can open the UI and hit
-"Failed to load configuration". The request carries Basic auth because this package
-enables authentication by default.
+"Failed to load configuration". `/api/auth/status` is public and counts rows in the
+`users` table, so it proves the database is up **without sending credentials** —
+which matters because the user can change their own username and password inside
+YTPTube, and a credentialed probe would then authenticate with stale details and
+report a healthy service as broken.
 
 ---
 
@@ -141,7 +146,7 @@ enables authentication by default.
 | ------------ | --------------------------- | -------- | --------------------------------------------------------------- |
 | File Browser | Optional (only if selected) | `exists` | When chosen as the download destination, downloads are written into its `data` volume. |
 
-The version constraint is defined in the manifest.
+The version constraint is declared in `startos/dependencies.ts`. Two packages ship under the `filebrowser` id — the original `filebrowser/filebrowser` line (now titled "File Browser (unsupported)") and its successor **FileBrowser Quantum**, whose versions carry a `#quantum` flavor — and the range names both (`>=2.63.2:0 || >=#quantum:1.5.2:0`). A flavored version does not satisfy an unflavored range, so listing only the original would leave Quantum, the supported package, unmatched. Either works here: both expose the `data` volume this package mounts, and both run as uid 1000, which is what makes the shared-ownership scheme above work without an idmap.
 
 If the destination is Local Storage (the default), YTPTube has **no dependencies**.
 

@@ -38,7 +38,8 @@ export const downloadDestination = sdk.Action.withInput(
   // pre-fill with the current selection
   async ({ effects }) => ({
     downloadDestination:
-      (await store.read((s) => s.downloadDestination).const(effects)) || 'local',
+      (await store.read((s) => s.downloadDestination).const(effects)) ||
+      'local',
   }),
 
   // execution: persist the choice (the service restarts to apply it)
