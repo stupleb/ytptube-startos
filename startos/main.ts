@@ -80,19 +80,27 @@ export const main = sdk.setupMain(async ({ effects }) => {
     })
     .addDaemon('primary', {
       subcontainer: sub,
-      // Image ENTRYPOINT (/entrypoint.sh) + default CMD, run as the image's
-      // `app` user. We override the download path (and, for File Browser, the
-      // temp path so large in-progress files don't fill the ephemeral rootfs),
-      // and layer on StartOS-appropriate defaults:
+      // Image ENTRYPOINT (`tini -g -- /entrypoint.sh`) + default CMD, run as
+      // the image's `app` user. The entrypoint hands off to the image's
+      // start-services script, which runs YTPTube alongside the bundled bgutil
+      // YouTube PO-token server (Deno, :4416) and stops both if either exits.
+      // We override the download path (and, for File Browser, the temp path so
+      // large in-progress files don't fill the ephemeral rootfs), and layer on
+      // StartOS-appropriate defaults:
       //   - BROWSER_CONTROL_ENABLED: rename/delete/move/mkdir in the built-in
       //     file manager (off upstream by default).
       //   - CHECK_FOR_UPDATES off: StartOS manages package updates.
       //   - AUTH_*: credentials generated on install (see init/watchAuth.ts).
+      //   - TINI_SUBREAPER: a subcontainer's PID 1 is StartOS's own launcher,
+      //     not tini, so tini must register as a child subreaper to reap the
+      //     processes yt-dlp orphans (ffmpeg and friends). Without it tini
+      //     warns on every start and zombie reaping falls to the launcher.
       // Note: the in-app terminal (YTP_CONSOLE_ENABLED) is intentionally left
       // off — it executes commands and is a remote-exec surface.
       exec: {
         command: sdk.useEntrypoint(),
         env: {
+          TINI_SUBREAPER: '1',
           YTP_BROWSER_CONTROL_ENABLED: 'true',
           YTP_CHECK_FOR_UPDATES: 'false',
           YTP_DOWNLOAD_PATH: downloadPath,
