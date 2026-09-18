@@ -91,16 +91,17 @@ export const main = sdk.setupMain(async ({ effects }) => {
       //     file manager (off upstream by default).
       //   - CHECK_FOR_UPDATES off: StartOS manages package updates.
       //   - AUTH_*: credentials generated on install (see init/watchAuth.ts).
-      //   - TINI_SUBREAPER: a subcontainer's PID 1 is StartOS's own launcher,
-      //     not tini, so tini must register as a child subreaper to reap the
-      //     processes yt-dlp orphans (ffmpeg and friends). Without it tini
-      //     warns on every start and zombie reaping falls to the launcher.
       // Note: the in-app terminal (YTP_CONSOLE_ENABLED) is intentionally left
       // off — it executes commands and is a remote-exec surface.
       exec: {
         command: sdk.useEntrypoint(),
+        // Launch the entrypoint as the subcontainer's PID 1. That entrypoint is
+        // tini, which otherwise runs under StartOS's launcher, warns on every
+        // start that it is not PID 1, and cannot reap the processes yt-dlp
+        // orphans (ffmpeg and friends). The setup oneshot is unaffected: it
+        // exits before this daemon starts.
+        runAsInit: true,
         env: {
-          TINI_SUBREAPER: '1',
           YTP_BROWSER_CONTROL_ENABLED: 'true',
           YTP_CHECK_FOR_UPDATES: 'false',
           YTP_DOWNLOAD_PATH: downloadPath,

@@ -42,7 +42,7 @@ The package runs upstream's published image as-is, in one subcontainer that host
 
 The image's entrypoint is `tini`, which runs a script that checks `/config` and the download path are writable, then starts **two processes side by side**: YTPTube itself (Python) and the bundled bgutil **YouTube PO-token server** (Deno, listening on port 4416 inside the container). yt-dlp asks that server for the proof-of-origin tokens YouTube requires for many videos. If either process exits, the script stops the other and exits, and StartOS restarts the daemon — so a crashed token server shows up as a brief restart, not as YouTube downloads quietly failing. The token server costs memory: measured at roughly 160 MB resident, somewhat more than YTPTube itself.
 
-StartOS's own launcher is the subcontainer's PID 1, not `tini`, so the package sets `TINI_SUBREAPER` to have `tini` reap the processes yt-dlp leaves orphaned (ffmpeg and friends).
+The daemon is launched with `runAsInit`, which makes `tini` the subcontainer's PID 1. Without it, `tini` runs under StartOS's own launcher, warns on every start that it is not PID 1, and cannot reap the processes yt-dlp leaves orphaned (ffmpeg and friends).
 
 Subcontainers:
 
@@ -84,7 +84,6 @@ The package keeps one file of its own and configures YTPTube through environment
 | `YTP_CHECK_FOR_UPDATES`       | `false`                                 | StartOS manages updates, so the in-app update check and banner are off. |
 | `YTP_DOWNLOAD_PATH`           | `/downloads` or the File Browser folder | Follows the chosen destination. |
 | `YTP_TEMP_PATH`               | the File Browser folder                 | File Browser destination only, so large in-progress files don't fill the ephemeral root filesystem. |
-| `TINI_SUBREAPER`              | `1`                                     | See [Image and Container Runtime](#image-and-container-runtime). |
 
 `YTP_AUTH_USERNAME` (`admin`) and `YTP_AUTH_PASSWORD` are also passed every start, but YTPTube consumes them **only on a launch that finds its users table empty**, to create the one account it allows. From then on they are ignored: changing them does not change the login, and anything that rotates the password has to act on the database — which is why Reset Admin Password runs upstream's reset script rather than rewriting the variable.
 
@@ -210,7 +209,6 @@ startos_managed_env_vars:
   - YTP_TEMP_PATH
   - YTP_AUTH_USERNAME
   - YTP_AUTH_PASSWORD
-  - TINI_SUBREAPER
 dependencies: [filebrowser] # optional; only when the destination is File Browser
 interfaces:
   ui: { type: ui, port: 8081 }
