@@ -33,3 +33,16 @@ export const filebrowserDescription = {
   fr_FR:
     'Enregistrez éventuellement les téléchargements dans File Browser plutôt que dans le stockage local.',
 }
+
+export const nextexplorerDescription = {
+  en_US:
+    'Optionally save downloads into NextExplorer instead of local storage.',
+  es_ES:
+    'Opcionalmente, guarda las descargas en NextExplorer en lugar del almacenamiento local.',
+  de_DE:
+    'Downloads optional in NextExplorer statt im lokalen Speicher ablegen.',
+  pl_PL:
+    'Opcjonalnie zapisuj pobrania w NextExplorer zamiast w pamięci lokalnej.',
+  fr_FR:
+    'Enregistrez éventuellement les téléchargements dans NextExplorer plutôt que dans le stockage local.',
+}

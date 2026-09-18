@@ -29,5 +29,15 @@ export const setDependencies = sdk.setupDependencies(async ({ effects }) => {
     }
   }
 
+  // Same shape for NextExplorer: `exists`, since only its `data` volume is
+  // needed. It mounts that volume at /mnt and chowns it to uid 1000 on every
+  // start, the same uid as YTPTube's `app`.
+  if (downloadDestination === 'nextexplorer') {
+    deps['nextexplorer'] = {
+      kind: 'exists',
+      versionRange: '>=2.2.7:0',
+    }
+  }
+
   return deps
 })

@@ -1,37 +1,68 @@
 import { manifest as filebrowserManifest } from 'filebrowser-startos/startos/manifest'
+import { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
+import {
+  Destination,
+  destinations,
+  PackageInstalled,
+  RetryAfter,
+} from './destinations'
 import { store } from './fileModels/store.json'
 import { i18n } from './i18n'
 import { sdk } from './sdk'
 import { authUsername, uiPort } from './utils'
 
-// When File Browser is the chosen destination, downloads land in a
-// 'ytptube-downloads' folder at the top level of File Browser's data volume.
-// Only that folder is mounted (a subpath mount, auto-created by the host on
-// first use), so YTPTube cannot touch the rest of File Browser's files. No
-// idmap is needed on the mount: StartOS applies the same base id-mapping to
-// every volume mount, so on-disk uids are shared 1:1 across services — and
-// YTPTube's `app` and File Browser's `user` are both uid 1000 in their
-// images, so files either side writes are natively owned by the other. If
-// either image ever changes its uid, an `idmap` on the mount below
-// ([{ fromId: <filebrowser uid>, toId: <ytptube uid> }]) is the remedy.
-// The mountpoint keeps the container-visible path from before 2.5.6:1 (when
-// the whole volume was mounted at /mnt/filebrowser), so any absolute paths
-// YTPTube persisted — history entries, user-set templates — stay valid.
-const FB_DOWNLOAD_PATH = '/mnt/filebrowser/ytptube-downloads'
+// Downloads can go to a folder in another service's `data` volume instead of
+// YTPTube's own `downloads` volume (see destinations.ts). Only that folder is
+// mounted — a subpath mount, created by the host on first use — so YTPTube
+// cannot touch the rest of the other service's files. No idmap is needed:
+// StartOS applies the same base id-mapping to every volume mount, so on-disk
+// uids are shared 1:1 across services, and YTPTube's `app`, File Browser's
+// user and NextExplorer's server all run as uid 1000 — files either side
+// writes are natively owned by the other. If an image ever changes its uid, an
+// `idmap` on the mount ([{ fromId: <their uid>, toId: <ytptube uid> }]) is the
+// remedy.
+
+// How long to wait before retrying a destination whose volume was not there
+// yet (see below). Doubles per failed attempt, capped, so a long restore does
+// not restart YTPTube every half minute; resets once a mount succeeds.
+const firstRetryMs = 30_000
+const maxRetryMs = 5 * 60_000
+let retryMs = firstRetryMs
 
 export const main = sdk.setupMain(async ({ effects }) => {
   console.info(i18n('Starting YTPTube!'))
 
-  // Reactive reads — changing either restarts the daemon so the mount set and
-  // env below are re-evaluated.
+  // Reactive reads — a change to any of them restarts the daemon so the mount
+  // set and env below are re-evaluated.
   const adminPassword = await store.read((s) => s.adminPassword).const(effects)
   const destination =
     (await store.read((s) => s.downloadDestination).const(effects)) ?? 'local'
-  const filebrowser = destination === 'filebrowser'
 
-  const downloadPath = filebrowser ? FB_DOWNLOAD_PATH : '/downloads'
+  // A destination whose service is not installed would leave downloads in a
+  // volume no installed service shows, so fall back to local storage until it
+  // is back; init/watchDestination.ts tells the user. PackageInstalled re-runs
+  // this only when that service is installed or uninstalled, not when it
+  // merely starts or stops.
+  const installed =
+    destination !== 'local' &&
+    (await new PackageInstalled(
+      effects,
+      destinations[destination].packageId,
+    ).const())
+  if (destination === 'filebrowser' && !installed)
+    console.warn(
+      i18n(
+        'File Browser is not installed, so downloads are going to Local Storage. Reinstall it, or choose another destination.',
+      ),
+    )
+  if (destination === 'nextexplorer' && !installed)
+    console.warn(
+      i18n(
+        'NextExplorer is not installed, so downloads are going to Local Storage. Reinstall it, or choose another destination.',
+      ),
+    )
 
-  let mounts = sdk.Mounts.of()
+  const localMounts = sdk.Mounts.of()
     .mountVolume({
       volumeId: 'main',
       subpath: null,
@@ -45,32 +76,79 @@ export const main = sdk.setupMain(async ({ effects }) => {
       readonly: false,
     })
 
-  if (filebrowser) {
-    mounts = mounts.mountDependency<typeof filebrowserManifest>({
-      dependencyId: 'filebrowser',
-      volumeId: 'data',
-      subpath: 'ytptube-downloads',
-      mountpoint: FB_DOWNLOAD_PATH,
-      readonly: false,
-    })
-  }
+  const remoteMounts = !installed
+    ? null
+    : destination === 'filebrowser'
+      ? localMounts.mountDependency<typeof filebrowserManifest>({
+          dependencyId: 'filebrowser',
+          volumeId: 'data',
+          subpath: destinations.filebrowser.subpath,
+          mountpoint: destinations.filebrowser.mountpoint,
+          readonly: false,
+        })
+      : destination === 'nextexplorer'
+        ? localMounts.mountDependency<typeof nextexplorerManifest>({
+            dependencyId: 'nextexplorer',
+            volumeId: 'data',
+            subpath: destinations.nextexplorer.subpath,
+            mountpoint: destinations.nextexplorer.mountpoint,
+            readonly: false,
+          })
+        : null
 
-  const sub = sdk.SubContainer.of(
+  let effective: Destination = 'local'
+  let sub: ReturnType<typeof sdk.SubContainer.of> | null = null
+  if (remoteMounts) {
+    const remote = sdk.SubContainer.of(
+      effects,
+      { imageId: 'ytptube' },
+      remoteMounts,
+      'ytptube-sub',
+    )
+    // Materialize here rather than on the setup oneshot's first run. The
+    // service counts as installed from the moment its install or restore
+    // begins, before its volume exists, and StartOS refuses to mount a volume
+    // that doesn't exist. Failing inside the oneshot would be permanent: the
+    // lazy handle caches a rejected materialization, so every retry fails the
+    // same way. Here it can fall back to local storage and try again later —
+    // nothing else re-runs main when that install finishes.
+    try {
+      await remote.eager()
+      sub = remote
+      effective = destination
+      retryMs = firstRetryMs
+    } catch (e) {
+      console.warn(
+        i18n(
+          'The download destination is not ready yet, so downloads are going to Local Storage for now. YTPTube switches over by itself once it is.',
+        ),
+        e,
+      )
+      await new RetryAfter(effects, retryMs).const()
+      retryMs = Math.min(retryMs * 2, maxRetryMs)
+    }
+  }
+  sub ??= sdk.SubContainer.of(
     effects,
     { imageId: 'ytptube' },
-    mounts,
+    localMounts,
     'ytptube-sub',
   )
 
+  const downloadPath =
+    effective === 'local' ? '/downloads' : destinations[effective].mountpoint
+
   // Setup oneshot (runs as root before the daemon). YTPTube's image runs as the
-  // unprivileged `app` user and its entrypoint aborts unless its config/download
-  // paths are writable. The File Browser folder is created root-owned by the
-  // host on first mount (and pre-2.5.6:1 installs left it root-owned and
-  // world-writable), so hand it to `app` — File Browser's `user` is the same
-  // uid, so both services own it. The chmod strips the legacy 777 bit.
-  const setupScript = filebrowser
-    ? `chown -R app:app /config && chown app:app '${FB_DOWNLOAD_PATH}' && chmod 755 '${FB_DOWNLOAD_PATH}'`
-    : 'chown -R app:app /config /downloads'
+  // unprivileged `app` user and its entrypoint aborts unless its config and
+  // download paths are writable. A destination folder is created root-owned by
+  // the host on first mount, so hand it to `app`; the other service's user is
+  // the same uid, so both services own it. The chmod also strips the
+  // world-writable bit that installs of older versions of this package left on
+  // the File Browser folder.
+  const setupScript =
+    effective === 'local'
+      ? 'chown -R app:app /config /downloads'
+      : `chown -R app:app /config && chown app:app '${downloadPath}' && chmod 755 '${downloadPath}'`
 
   return sdk.Daemons.of(effects)
     .addOneshot('setup', {
@@ -84,9 +162,9 @@ export const main = sdk.setupMain(async ({ effects }) => {
       // the image's `app` user. The entrypoint hands off to the image's
       // start-services script, which runs YTPTube alongside the bundled bgutil
       // YouTube PO-token server (Deno, :4416) and stops both if either exits.
-      // We override the download path (and, for File Browser, the temp path so
-      // large in-progress files don't fill the ephemeral rootfs), and layer on
-      // StartOS-appropriate defaults:
+      // We override the download path (and, for File Browser or NextExplorer,
+      // the temp path, so large in-progress files don't fill the ephemeral
+      // rootfs), and layer on StartOS-appropriate defaults:
       //   - BROWSER_CONTROL_ENABLED: rename/delete/move/mkdir in the built-in
       //     file manager (off upstream by default).
       //   - CHECK_FOR_UPDATES off: StartOS manages package updates.
@@ -105,7 +183,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
           YTP_BROWSER_CONTROL_ENABLED: 'true',
           YTP_CHECK_FOR_UPDATES: 'false',
           YTP_DOWNLOAD_PATH: downloadPath,
-          ...(filebrowser ? { YTP_TEMP_PATH: downloadPath } : {}),
+          ...(effective !== 'local' ? { YTP_TEMP_PATH: downloadPath } : {}),
           ...(adminPassword
             ? {
                 YTP_AUTH_USERNAME: authUsername,

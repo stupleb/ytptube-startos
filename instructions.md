@@ -7,7 +7,7 @@
 ## What you get on StartOS
 
 - **YTPTube's web app** at the **Web UI** interface, with its login switched on — upstream leaves it off.
-- **Downloads kept on your server**, inside YTPTube or, if you choose, in File Browser, where you can browse, share, and manage them.
+- **Downloads kept on your server**, inside YTPTube or, if you choose, in File Browser or NextExplorer, where you can browse, share, and manage them.
 
 ## Signing in
 
@@ -30,9 +30,11 @@ If you change your password inside YTPTube, the one StartOS last showed you stop
 2. Click the **Web UI** interface and sign in.
 3. Paste a video or playlist URL to start downloading. Presets, schedules, and output options live in YTPTube's own settings.
 
-## Saving downloads to File Browser
+## Saving downloads to a file manager
 
-By default, downloads are saved inside YTPTube. To have them land in File Browser instead:
+By default, downloads are saved inside YTPTube. You can have them land in File Browser or NextExplorer instead, where you can browse, share, and manage them.
+
+### File Browser
 
 1. Install **FileBrowser Quantum** from the Marketplace.
 2. In YTPTube, run the **Select Download Destination** action and choose **File Browser**.
@@ -40,8 +42,22 @@ By default, downloads are saved inside YTPTube. To have them land in File Browse
 
 If you already run the older File Browser, it works too, but it is no longer maintained. Switching it to FileBrowser Quantum keeps your files, and YTPTube keeps saving to the same folder.
 
-This is an either/or choice: while File Browser is selected it is the *only* place downloads go. Switch back any time by choosing **Local Storage** — files already saved in File Browser stay there.
+### NextExplorer
+
+1. Install **NextExplorer** from the Marketplace.
+2. In YTPTube, run the **Select Download Destination** action and choose **NextExplorer**.
+3. YTPTube restarts, and from then on every download goes into a drive called **YTPTube** in NextExplorer.
+
+NextExplorer's admin account sees the YTPTube drive straight away. To let another NextExplorer account see it, go to **Settings → Admin → Users** in NextExplorer, open that account's **Volumes** tab, and add the drive.
+
+**Moving from File Browser to NextExplorer?** NextExplorer's **Import Files from File Browser** action copies your existing downloads into its FileBrowser drive. Then choose **NextExplorer** here, so new downloads go to the YTPTube drive, before you uninstall File Browser.
+
+### Either way
+
+This is an either/or choice: while a file manager is selected, it is the *only* place downloads go. Switch back any time by choosing **Local Storage** — files already saved stay where they are.
+
+If the file manager you chose is uninstalled, YTPTube saves downloads inside itself instead and shows a prompt on its service page until you reinstall it or choose another destination.
 
 ## Backups
 
-StartOS backups include your YTPTube settings, history, and account. **Downloaded media is not.** Downloads saved in File Browser are covered by File Browser's own backup; copy local downloads off the server yourself if you need to keep them.
+StartOS backups include your YTPTube settings, history, and account. **Downloaded media is not.** Downloads saved in File Browser or NextExplorer are covered by that service's own backup; copy local downloads off the server yourself if you need to keep them.

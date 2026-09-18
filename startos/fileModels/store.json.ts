@@ -4,10 +4,12 @@ import { sdk } from '../sdk'
 const shape = z.looseObject({
   // Generated on install (see init/watchAuth.ts); injected as YTP_AUTH_PASSWORD.
   adminPassword: z.string().optional().catch(undefined),
-  // Where downloads are saved. 'filebrowser' points YTP_DOWNLOAD_PATH at File
-  // Browser's volume (see main.ts). Undefined is treated as 'local'.
+  // Where downloads are saved: YTPTube's own volume, or a folder in File
+  // Browser's or NextExplorer's (see destinations.ts). Undefined is treated as
+  // 'local'. This is the user's choice; main falls back to local while the
+  // chosen service is not installed, without changing it here.
   downloadDestination: z
-    .enum(['local', 'filebrowser'])
+    .enum(['local', 'filebrowser', 'nextexplorer'])
     .optional()
     .catch(undefined),
 })
