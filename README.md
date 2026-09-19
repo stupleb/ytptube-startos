@@ -9,7 +9,7 @@
 > upstream documentation is accurate and fully applicable — see the
 > Documentation section of `instructions.md` for links.
 
-[YTPTube](https://github.com/arabcoders/ytptube) is a self-hosted web interface for yt-dlp: queued and concurrent downloads of video and audio from YouTube and many other sites, with scheduling, presets, and notifications. This package runs the upstream image unmodified, turns on its login, and can save downloads into File Browser.
+[YTPTube](https://github.com/arabcoders/ytptube) is a self-hosted web interface for yt-dlp: queued and concurrent downloads of video and audio from YouTube and many other sites, with scheduling, presets, and notifications. This package runs the upstream image unmodified, turns on its login, and can save downloads into File Browser or NextExplorer.
 
 ---
 
@@ -42,7 +42,7 @@ The package runs upstream's published image as-is, in one subcontainer that host
 
 The image's entrypoint is `tini`, which runs a script that checks `/config` and the download path are writable, then starts **two processes side by side**: YTPTube itself (Python) and the bundled bgutil **YouTube PO-token server** (Deno, listening on port 4416 inside the container). yt-dlp asks that server for the proof-of-origin tokens YouTube requires for many videos. If either process exits, the script stops the other and exits, and StartOS restarts the daemon — so a crashed token server shows up as a brief restart, not as YouTube downloads quietly failing. The token server costs memory: measured at roughly 160 MB resident, somewhat more than YTPTube itself.
 
-StartOS's own launcher is the subcontainer's PID 1, not `tini`, so the package sets `TINI_SUBREAPER` to have `tini` reap the processes yt-dlp leaves orphaned (ffmpeg and friends).
+The daemon is launched with `runAsInit`, which makes `tini` the subcontainer's PID 1. Without it, `tini` runs under StartOS's own launcher, warns on every start that it is not PID 1, and cannot reap the processes yt-dlp leaves orphaned (ffmpeg and friends).
 
 Subcontainers:
 
@@ -53,7 +53,7 @@ Subcontainers:
 
 ## Volume and Data Layout
 
-Settings and history live in an embedded SQLite database on the `main` volume; downloads land on the `downloads` volume or, optionally, in File Browser.
+Settings and history live in an embedded SQLite database on the `main` volume; downloads land on the `downloads` volume or, optionally, in File Browser or NextExplorer.
 
 | Volume      | Mount point   | Contents                                                                                         |
 | ----------- | ------------- | ------------------------------------------------------------------------------------------------ |
@@ -61,9 +61,20 @@ Settings and history live in an embedded SQLite database on the `main` volume; d
 | `main`      | `/config`     | `ytptube.db` (settings, history, the account and its sessions and API keys), presets, logs, and the packages yt-dlp self-updates into |
 | `downloads` | `/downloads`  | Finished downloads, while the destination is Local Storage                                       |
 
-In-progress files and yt-dlp's scratch data go to the container's ephemeral `/tmp`, as does the token server's state. With **File Browser** as the destination, only the `ytptube-downloads` folder at the top level of File Browser's `data` volume is mounted, read-write, at `/mnt/filebrowser/ytptube-downloads`; YTPTube's download and temp paths both point there, the local `downloads` volume sits idle, and YTPTube cannot see the rest of File Browser's files.
+In-progress files and yt-dlp's scratch data go to the container's ephemeral `/tmp`, as does the token server's state. With another service as the destination, only one folder of its `data` volume is mounted, read-write; YTPTube's download and temp paths both point there, the local `downloads` volume sits idle, and YTPTube cannot see the rest of that service's files:
 
-Files are shared between the two services without an idmap: StartOS mounts every volume in one shared id space, and YTPTube's `app` and File Browser's user are both uid 1000, so each natively owns what the other writes. The `setup` oneshot runs before the daemon on every start and chowns `/config` to `app` recursively, along with either `/downloads` (recursively) or the File Browser folder itself, which it also sets to mode `755`. The host creates that folder root-owned on first mount; the oneshot is what hands it to `app`.
+| Destination  | Folder in its `data` volume | Mounted in YTPTube at                  |
+| ------------ | --------------------------- | -------------------------------------- |
+| File Browser | `ytptube-downloads`         | `/mnt/filebrowser/ytptube-downloads`   |
+| NextExplorer | `YTPTube`                   | `/mnt/nextexplorer/YTPTube`            |
+
+NextExplorer shows each top-level folder of its volume as a drive, so the NextExplorer folder appears there as a drive named YTPTube.
+
+While the chosen service is **not installed**, YTPTube saves to the local `downloads` volume instead and raises a prompt (see [Tasks](#tasks)). It never writes into the folder then, because an uninstalled service's volume is shown by nothing. The stored choice is kept, so reinstalling the service switches YTPTube back to it automatically. Starting or stopping that service does not restart YTPTube; only installing or uninstalling it does.
+
+A service counts as installed as soon as its install or restore begins, before its volume exists. If YTPTube finds the volume missing then, it saves locally too and tries the mount again after 30 seconds, doubling the wait each time up to five minutes, until the volume appears. Each attempt restarts YTPTube, and the logs say "not ready yet" while it waits.
+
+Files are shared between the services without an idmap: StartOS mounts every volume in one shared id space, and YTPTube's `app`, File Browser's user and NextExplorer's server all run as uid 1000, so each natively owns what the other writes. The `setup` oneshot runs before the daemon on every start and chowns `/config` to `app` recursively, along with either `/downloads` (recursively) or the destination folder itself, which it also sets to mode `755`. The host creates that folder root-owned on first mount; the oneshot is what hands it to `app`, and a root-owned folder would be listed by the other service but unwritable there.
 
 ---
 
@@ -74,7 +85,7 @@ The package keeps one file of its own and configures YTPTube through environment
 **`store.json`** (JSON, `startos` volume):
 
 - `adminPassword` — generated at install; rewritten only by Reset Admin Password. It is passed to YTPTube as `YTP_AUTH_PASSWORD`, which YTPTube reads **only while it has no account yet** (see below). After the first boot the database owns the password, so this copy goes stale if the user changes the password inside YTPTube. Reset Admin Password brings the two back into step.
-- `downloadDestination` — `local` or `filebrowser`, written by Select Download Destination; read on every start to pick the mounts and the dependency.
+- `downloadDestination` — `local`, `filebrowser` or `nextexplorer`, written by Select Download Destination; read on every start to pick the mounts and the dependency. It is the user's choice and is never rewritten by the fallback described under [Volume and Data Layout](#volume-and-data-layout).
 
 **Environment variables**, re-asserted on every start:
 
@@ -82,9 +93,8 @@ The package keeps one file of its own and configures YTPTube through environment
 | ----------------------------- | --------------------------------------- | --- |
 | `YTP_BROWSER_CONTROL_ENABLED` | `true`                                  | Enables rename, delete, move, and new-folder in YTPTube's file manager (off upstream). |
 | `YTP_CHECK_FOR_UPDATES`       | `false`                                 | StartOS manages updates, so the in-app update check and banner are off. |
-| `YTP_DOWNLOAD_PATH`           | `/downloads` or the File Browser folder | Follows the chosen destination. |
-| `YTP_TEMP_PATH`               | the File Browser folder                 | File Browser destination only, so large in-progress files don't fill the ephemeral root filesystem. |
-| `TINI_SUBREAPER`              | `1`                                     | See [Image and Container Runtime](#image-and-container-runtime). |
+| `YTP_DOWNLOAD_PATH`           | `/downloads` or the destination folder  | Follows the destination actually in use. |
+| `YTP_TEMP_PATH`               | the destination folder                  | File Browser or NextExplorer destination only, so large in-progress files don't fill the ephemeral root filesystem. |
 
 `YTP_AUTH_USERNAME` (`admin`) and `YTP_AUTH_PASSWORD` are also passed every start, but YTPTube consumes them **only on a launch that finds its users table empty**, to create the one account it allows. From then on they are ignored: changing them does not change the login, and anything that rotates the password has to act on the database — which is why Reset Admin Password runs upstream's reset script rather than rewriting the variable.
 
@@ -94,13 +104,14 @@ The in-app terminal (`YTP_CONSOLE_ENABLED`) is left off because it executes comm
 
 ## Dependencies
 
-YTPTube depends on nothing unless File Browser is chosen as the download destination.
+YTPTube depends on nothing unless File Browser or NextExplorer is chosen as the download destination, and then only on that one.
 
-| Dependency   | Required                    | Health checks required | Mount |
-| ------------ | --------------------------- | ---------------------- | ----- |
-| File Browser | Only while it is the destination | None — it must be installed, not running | `ytptube-downloads` from its `data` volume at `/mnt/filebrowser/ytptube-downloads`, read-write |
+| Dependency   | Required                          | Health checks required                   | Mount |
+| ------------ | --------------------------------- | ---------------------------------------- | ----- |
+| File Browser | Only while it is the destination  | None — it must be installed, not running | `ytptube-downloads` from its `data` volume at `/mnt/filebrowser/ytptube-downloads`, read-write |
+| NextExplorer | Only while it is the destination  | None — it must be installed, not running | `YTPTube` from its `data` volume at `/mnt/nextexplorer/YTPTube`, read-write |
 
-It is needed only as a place to put files, so it can be stopped while YTPTube runs. Either package that ships under the `filebrowser` id satisfies the dependency — the original File Browser or its successor, FileBrowser Quantum — since both expose the `data` volume this package mounts and both run as uid 1000, which the shared-ownership scheme above relies on.
+Each is needed only as a place to put files, so it can be stopped while YTPTube runs. Either package that ships under the `filebrowser` id satisfies the File Browser dependency — the original File Browser or its successor, FileBrowser Quantum. All three expose a `data` volume and run as uid 1000, which the shared-ownership scheme above relies on.
 
 ---
 
@@ -135,9 +146,9 @@ One action recovers access to the account; the other chooses where downloads go.
 - *Repeat safety:* safe; each run issues a new password and signs everyone out again.
 - *Outputs:* the account's username and the new password.
 
-**Select Download Destination** — choose Local Storage or File Browser.
+**Select Download Destination** — choose Local Storage, File Browser, or NextExplorer. Also the target of the prompt raised while the chosen service is not installed.
 
-- *Changes:* `downloadDestination` in `store.json`, which changes the mounts and whether File Browser is declared as a dependency. Existing downloads are not moved.
+- *Changes:* `downloadDestination` in `store.json`, which changes the mounts and which service, if any, is declared as a dependency. Existing downloads are not moved, and downloads still queued keep the path they were queued with, so they fail once it is no longer mounted.
 - *Cost:* the daemon restarts to apply it.
 - *Repeat safety:* idempotent.
 
@@ -145,13 +156,14 @@ One action recovers access to the account; the other chooses where downloads go.
 
 ## Tasks
 
-The package raises one task, and it never blocks the service from starting.
+The package raises at most two tasks, and neither blocks the service from starting.
 
-| Task                              | Raised when                           | Severity  | Cleared by |
-| --------------------------------- | ------------------------------------- | --------- | ---------- |
-| Set your YTPTube admin password   | Install — no password has been stored yet | important | Running Reset Admin Password |
+| Task | Raised when | Severity | Cleared by |
+| ---- | ----------- | -------- | ---------- |
+| Set your YTPTube admin password | Install — no password has been stored yet | important | Running Reset Admin Password |
+| *File Browser / NextExplorer is not installed, so downloads are going to Local Storage* | The chosen destination's service is not installed | important | That service being installed again, or choosing another destination with Select Download Destination |
 
-It does not return once cleared, because a password stays stored from then on.
+The password task does not return once cleared, because a password stays stored from then on. The destination task comes back whenever the chosen service is uninstalled.
 
 ---
 
@@ -171,21 +183,22 @@ Not ready during the first minute is normal: startup includes yt-dlp's online se
 
 Backups copy the `startos` and `main` volumes wholesale; downloaded media is not included.
 
-Because the password lives in both `store.json` (`startos`) and the account database (`main`), restoring brings them back together, along with all settings, history, presets, and API keys. The `downloads` volume is deliberately excluded to keep backups small. Downloads saved to File Browser live in File Browser's own volume and are covered by its backup instead.
+Because the password lives in both `store.json` (`startos`) and the account database (`main`), restoring brings them back together, along with all settings, history, presets, and API keys. The `downloads` volume is deliberately excluded to keep backups small. Downloads saved to File Browser or NextExplorer live in that service's own volume and are covered by its backup instead.
 
-A restored instance needs nothing further before use — except that if File Browser was the destination, File Browser must be installed again, or YTPTube keeps writing into a folder no installed service shows until the destination is switched back to Local Storage.
+A restored instance needs nothing further before use. If its destination service is not installed yet, YTPTube saves locally and raises its prompt until that service is back.
 
 ---
 
 ## Limitations and Differences
 
-1. **File Browser is an either/or destination.** While selected, it is the only place downloads go; it is not an extra folder alongside local downloads, because YTPTube confines downloads to one base path. Switching back leaves already-saved files in File Browser.
-2. **Local downloads are not backed up** — see [Backups and Restore](#backups-and-restore).
-3. **One account.** YTPTube allows exactly one; it can be renamed and its password changed from inside the app, but no second account can be created.
-4. **A password changed inside YTPTube is not known to StartOS.** Reset Admin Password always restores access.
-5. **Upstream's single sign-on options are unavailable.** OIDC and trusted-proxy (`Remote-User`) sign-in are configured in a `config.toml` inside the `main` volume, which StartOS provides no way to edit.
-6. **Upstream settings that are only read from environment variables can't be changed** — for example filename trimming. The ones the package sets are listed under [File Models](#file-models).
-7. **The in-app terminal is disabled**, because it executes commands on the server.
+1. **The download destination is either/or.** While File Browser or NextExplorer is selected, it is the only place downloads go; it is not an extra folder alongside local downloads, because YTPTube confines downloads to one base path. Switching leaves already-saved files where they are.
+2. **In NextExplorer, only the admin account sees the YTPTube drive automatically.** Other NextExplorer accounts see it only once it is granted to them in NextExplorer's user settings.
+3. **Local downloads are not backed up** — see [Backups and Restore](#backups-and-restore).
+4. **One account.** YTPTube allows exactly one; it can be renamed and its password changed from inside the app, but no second account can be created.
+5. **A password changed inside YTPTube is not known to StartOS.** Reset Admin Password always restores access.
+6. **Upstream's single sign-on options are unavailable.** OIDC and trusted-proxy (`Remote-User`) sign-in are configured in a `config.toml` inside the `main` volume, which StartOS provides no way to edit.
+7. **Upstream settings that are only read from environment variables can't be changed** — for example filename trimming. The ones the package sets are listed under [File Models](#file-models).
+8. **The in-app terminal is disabled**, because it executes commands on the server.
 
 ---
 
@@ -200,7 +213,8 @@ volumes:
   startos: (not mounted)
   main: /config
   downloads: /downloads
-  filebrowser:data/ytptube-downloads: /mnt/filebrowser/ytptube-downloads # only when the destination is File Browser
+  filebrowser:data/ytptube-downloads: /mnt/filebrowser/ytptube-downloads # only when the destination is File Browser and it is installed
+  nextexplorer:data/YTPTube: /mnt/nextexplorer/YTPTube # only when the destination is NextExplorer and it is installed
 file_models:
   - store.json
 startos_managed_env_vars:
@@ -210,8 +224,7 @@ startos_managed_env_vars:
   - YTP_TEMP_PATH
   - YTP_AUTH_USERNAME
   - YTP_AUTH_PASSWORD
-  - TINI_SUBREAPER
-dependencies: [filebrowser] # optional; only when the destination is File Browser
+dependencies: [filebrowser, nextexplorer] # optional; only the chosen destination's
 interfaces:
   ui: { type: ui, port: 8081 }
 actions:
@@ -219,6 +232,7 @@ actions:
   - download-destination
 tasks:
   - { action: reset-admin-password, severity: important }
+  - { action: download-destination, severity: important } # while the chosen destination is not installed
 health_checks:
   - primary
 ```

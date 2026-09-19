@@ -8,11 +8,12 @@ export const inputSpec = InputSpec.of({
   downloadDestination: Value.select({
     name: i18n('Download Destination'),
     description: i18n(
-      'Where YTPTube saves downloads. "File Browser" sends every download into File Browser (it becomes the sole download location while selected); "Local Storage" keeps them in YTPTube.',
+      'Where YTPTube saves downloads. "File Browser" or "NextExplorer" sends every download into that service (it becomes the only download location while selected); "Local Storage" keeps them in YTPTube.',
     ),
     values: {
       local: i18n('Local Storage'),
       filebrowser: i18n('File Browser'),
+      nextexplorer: i18n('NextExplorer'),
     },
     default: 'local',
   }),

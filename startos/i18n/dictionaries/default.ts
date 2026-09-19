@@ -13,7 +13,7 @@ const dict = {
 
   // actions/downloadDestination.ts
   'Download Destination': 6,
-  'Where YTPTube saves downloads. "File Browser" sends every download into File Browser (it becomes the sole download location while selected); "Local Storage" keeps them in YTPTube.': 7,
+  'Where YTPTube saves downloads. "File Browser" or "NextExplorer" sends every download into that service (it becomes the only download location while selected); "Local Storage" keeps them in YTPTube.': 7,
   'Local Storage': 8,
   'File Browser': 9,
   'Select Download Destination': 10,
@@ -27,6 +27,12 @@ const dict = {
   Username: 16,
   Password: 17,
   'Set your YTPTube admin password': 18,
+
+  // actions/downloadDestination.ts + init/watchDestination.ts + main.ts
+  NextExplorer: 19,
+  'File Browser is not installed, so downloads are going to Local Storage. Reinstall it, or choose another destination.': 20,
+  'NextExplorer is not installed, so downloads are going to Local Storage. Reinstall it, or choose another destination.': 21,
+  'The download destination is not ready yet, so downloads are going to Local Storage for now. YTPTube switches over by itself once it is.': 22,
 } as const
 
 /**
