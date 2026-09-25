@@ -6,7 +6,7 @@ import {
   PackageInstalled,
   RetryAfter,
 } from './destinations'
-import { store } from './fileModels/store.json'
+import { store, StoreType } from './fileModels/store.json'
 import { i18n } from './i18n'
 import { sdk } from './sdk'
 import { authUsername, uiPort } from './utils'
@@ -29,6 +29,39 @@ const firstRetryMs = 30_000
 const maxRetryMs = 5 * 60_000
 let retryMs = firstRetryMs
 
+// The Download Settings and yt-dlp Settings actions' values, as the YTP_*
+// variables YTPTube reads at startup. Unset ones are left out so upstream's
+// defaults apply. Stable yt-dlp is upstream's default, so it needs no variable.
+// Verbose logging needs two: YTP_YTDLP_DEBUG puts yt-dlp in verbose mode, but
+// YTPTube logs those lines at DEBUG level, which its default `info` level drops.
+const settingsEnv = (
+  s: Pick<
+    StoreType,
+    | 'maxWorkers'
+    | 'maxWorkersPerExtractor'
+    | 'retry'
+    | 'autoClearHistoryDays'
+    | 'removeFiles'
+    | 'ytdlpVersion'
+    | 'ytdlpDebug'
+  >,
+) => {
+  const env: Record<string, string> = {}
+  const set = (key: string, value: number | boolean | undefined) => {
+    if (value !== undefined) env[key] = String(value)
+  }
+  set('YTP_MAX_WORKERS', s.maxWorkers)
+  set('YTP_MAX_WORKERS_PER_EXTRACTOR', s.maxWorkersPerExtractor)
+  set('YTP_RETRY', s.retry)
+  set('YTP_AUTO_CLEAR_HISTORY_DAYS', s.autoClearHistoryDays)
+  set('YTP_REMOVE_FILES', s.removeFiles)
+  set('YTP_YTDLP_DEBUG', s.ytdlpDebug)
+  if (s.ytdlpDebug) env.YTP_LOG_LEVEL = 'debug'
+  if (s.ytdlpVersion && s.ytdlpVersion !== 'stable')
+    env.YTP_YTDLP_VERSION = s.ytdlpVersion
+  return env
+}
+
 export const main = sdk.setupMain(async ({ effects }) => {
   console.info(i18n('Starting YTPTube!'))
 
@@ -37,6 +70,18 @@ export const main = sdk.setupMain(async ({ effects }) => {
   const adminPassword = await store.read((s) => s.adminPassword).const(effects)
   const destination =
     (await store.read((s) => s.downloadDestination).const(effects)) ?? 'local'
+  // Download Settings and yt-dlp Settings (see those actions).
+  const settings = await store
+    .read((s) => ({
+      maxWorkers: s.maxWorkers,
+      maxWorkersPerExtractor: s.maxWorkersPerExtractor,
+      retry: s.retry,
+      autoClearHistoryDays: s.autoClearHistoryDays,
+      removeFiles: s.removeFiles,
+      ytdlpVersion: s.ytdlpVersion,
+      ytdlpDebug: s.ytdlpDebug,
+    }))
+    .const(effects)
 
   // A destination whose service is not installed would leave downloads in a
   // volume no installed service shows, so fall back to local storage until it
@@ -190,6 +235,8 @@ export const main = sdk.setupMain(async ({ effects }) => {
                 YTP_AUTH_PASSWORD: adminPassword,
               }
             : {}),
+          // User settings; anything unset keeps upstream's default.
+          ...settingsEnv(settings ?? {}),
         },
       },
       // Don't report ready until a database-backed endpoint answers. YTPTube
