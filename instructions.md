@@ -58,6 +58,27 @@ This is an either/or choice: while a file manager is selected, it is the *only* 
 
 If the file manager you chose is uninstalled, YTPTube saves downloads inside itself instead and shows a prompt on its service page until you reinstall it or choose another destination.
 
+## Adjusting how downloads run
+
+Run **Download Settings** to change how many downloads run at once, how often a failed download is retried, and what happens to finished downloads:
+
+- **Forget Finished Downloads After** clears old entries from the history list. The files themselves are kept.
+- **Delete Files With Their History Entries** makes deleting a download in YTPTube delete its file too, including when you clear the whole list. It only finds files in the destination you are using now. If you switched destinations, delete older downloads from the file manager instead.
+
+Each change restarts YTPTube.
+
+## When YouTube downloads stop working
+
+YouTube changes often, and YTPTube updates yt-dlp, the tool that does the downloading, every time it starts.
+
+1. Restart YTPTube to pick up the newest yt-dlp.
+2. If downloads still fail, run **yt-dlp Settings** and choose **Nightly**. Fixes usually arrive there first. Switch back to **Stable** once a new stable release is out.
+3. To see what is going wrong, turn on **Verbose yt-dlp Logging** in the same action, try the download again, and read the service logs. The detail includes your server's public IP address, so check the logs before you share them, and turn it off when you are done.
+
+## Erasing everything YTPTube has downloaded
+
+**Clear History** deletes every file YTPTube has downloaded, in its own storage and in its folders in File Browser and NextExplorer, along with the download history and logs. Stop YTPTube first; the action is available only while it is stopped. Your account, presets and settings are kept. Scheduled downloads are switched off so they don't start downloading everything again; turn them back on in YTPTube when you want them.
+
 ## Backups
 
 StartOS backups include your YTPTube settings, history, and account. **Downloaded media is not.** Downloads saved in File Browser or NextExplorer are covered by that service's own backup; copy local downloads off the server yourself if you need to keep them.

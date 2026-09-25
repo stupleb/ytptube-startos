@@ -86,6 +86,7 @@ The package keeps one file of its own and configures YTPTube through environment
 
 - `adminPassword` — generated at install; rewritten only by Reset Admin Password. It is passed to YTPTube as `YTP_AUTH_PASSWORD`, which YTPTube reads **only while it has no account yet** (see below). After the first boot the database owns the password, so this copy goes stale if the user changes the password inside YTPTube. Reset Admin Password brings the two back into step.
 - `downloadDestination` — `local`, `filebrowser` or `nextexplorer`, written by Select Download Destination; read on every start to pick the mounts and the dependency. It is the user's choice and is never rewritten by the fallback described under [Volume and Data Layout](#volume-and-data-layout).
+- `maxWorkers`, `maxWorkersPerExtractor`, `retry`, `autoClearHistoryDays`, `removeFiles` — written by Download Settings. `ytdlpVersion` (`stable`, `nightly`, or a release number) and `ytdlpDebug` — written by yt-dlp Settings. All are absent until their action is first saved, and while absent YTPTube's own defaults apply. They belong to the user; the package only reads them, on every start.
 
 **Environment variables**, re-asserted on every start:
 
@@ -96,9 +97,20 @@ The package keeps one file of its own and configures YTPTube through environment
 | `YTP_DOWNLOAD_PATH`           | `/downloads` or the destination folder  | Follows the destination actually in use. |
 | `YTP_TEMP_PATH`               | the destination folder                  | File Browser or NextExplorer destination only, so large in-progress files don't fill the ephemeral root filesystem. |
 
+**Set only once the user has chosen a value** (see [Actions](#actions)):
+
+| Variable                                                                                                                         | Value                                                |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
+| `YTP_MAX_WORKERS`, `YTP_MAX_WORKERS_PER_EXTRACTOR`, `YTP_RETRY`, `YTP_AUTO_CLEAR_HISTORY_DAYS`, `YTP_REMOVE_FILES`               | from Download Settings                               |
+| `YTP_YTDLP_VERSION`                                                                                                              | `nightly` or a release number; not set for stable    |
+| `YTP_YTDLP_DEBUG`                                                                                                                | from yt-dlp Settings                                 |
+| `YTP_LOG_LEVEL`                                                                                                                  | `debug` while verbose yt-dlp logging is on           |
+
+Verbose logging needs both of the last two. `YTP_YTDLP_DEBUG` puts yt-dlp in verbose mode, but YTPTube logs those lines at DEBUG level with their `[debug]` prefix stripped, and its default `info` level drops them. With both set, the service logs show yt-dlp's version, its PO-token providers, and every media request, including the googlevideo URLs, which embed the server's public IP.
+
 `YTP_AUTH_USERNAME` (`admin`) and `YTP_AUTH_PASSWORD` are also passed every start, but YTPTube consumes them **only on a launch that finds its users table empty**, to create the one account it allows. From then on they are ignored: changing them does not change the login, and anything that rotates the password has to act on the database — which is why Reset Admin Password runs upstream's reset script rather than rewriting the variable.
 
-The in-app terminal (`YTP_CONSOLE_ENABLED`) is left off because it executes commands. yt-dlp's self-update stays at the upstream default (on), which is why the service makes an outbound call on each start.
+The in-app terminal (`YTP_CONSOLE_ENABLED`) is left off because it executes commands. yt-dlp's self-update stays at the upstream default (on), which is why the service makes an outbound call on each start; yt-dlp Settings chooses what it updates to. Settings that would open a remote-execution surface or remove the login — `YTP_DISABLE_AUTH`, `YTP_CONSOLE_ENABLED`, `YTP_DEBUG`, `YTP_PIP_PACKAGES` — are deliberately not exposed by any action.
 
 ---
 
@@ -137,7 +149,7 @@ At install, the init step generates a random password into `store.json` and rais
 
 ## Actions
 
-One action recovers access to the account; the other chooses where downloads go.
+One action recovers access to the account and one chooses where downloads go; two tune YTPTube, and one erases everything it has downloaded.
 
 **Reset Admin Password** — run it to get a password on first install, or to recover access at any time, including after the password or username was changed inside YTPTube.
 
@@ -151,6 +163,26 @@ One action recovers access to the account; the other chooses where downloads go.
 - *Changes:* `downloadDestination` in `store.json`, which changes the mounts and which service, if any, is declared as a dependency. Existing downloads are not moved, and downloads still queued keep the path they were queued with, so they fail once it is no longer mounted.
 - *Cost:* the daemon restarts to apply it.
 - *Repeat safety:* idempotent.
+
+**Download Settings** — run it to limit how many downloads run at once (a server short of memory, or YouTube slowing downloads), to retry downloads that fail on a temporary error, to keep the history list short, or to have YTPTube delete files along with their history entries.
+
+- *Changes:* the five Download Settings keys in `store.json`, passed as the variables listed under [File Models](#file-models). Until first saved, the form shows YTPTube's defaults: 2 per site, 20 in total, no retries, history kept forever, files kept. Forgetting finished downloads after N days removes history records only; YTPTube's automatic clean-up never deletes files, whatever the delete-files setting says. With delete-files on, every deletion in YTPTube's UI also removes the file and its same-named sidecars (`<name>.*`), including clearing the whole finished list. See [Limitations](#limitations-and-differences) for how that behaves after a change of destination.
+- *Cost:* the daemon restarts to apply it, interrupting downloads in progress.
+- *Repeat safety:* idempotent.
+
+**yt-dlp Settings** — run it when YouTube downloads start failing and the fix is only in yt-dlp's nightly builds, to stay on one yt-dlp release, or to capture yt-dlp's detailed output for troubleshooting.
+
+- *Changes:* `ytdlpVersion` and `ytdlpDebug` in `store.json`. YTPTube's upgrader installs the chosen yt-dlp into a user site under `/config` (`python<version>-packages`) on each start: Stable takes the newest release, Nightly follows the newest nightly on every start, and a specific version stays put. When the release choice changes, the action also removes that folder's `.version` stamp, so on the next start the upgrader clears everything it installed and installs the new choice from scratch. Without that, going from a specific version back to Stable keeps the old version, because upstream's check reads the image's bundled copy rather than the installed one. Specific versions must be release numbers (`2026.08.19`); the handler checks this as well as the form, since a text field's pattern is enforced by the form only.
+- *Cost:* the daemon restarts. A start that installs a different yt-dlp takes longer while it downloads from PyPI.
+- *Repeat safety:* idempotent. Saving the same release again resets nothing.
+- *Outputs:* none. With verbose logging on, the service logs carry googlevideo URLs, which embed the server's public IP.
+
+**Clear History** — an emergency wipe of everything YTPTube has downloaded and every record of it, to free the space in one step or to remove all traces. Run it with the service stopped.
+
+- *Changes:* deletes everything inside `/downloads`, and inside YTPTube's folder in File Browser's and NextExplorer's `data` volumes, for each of those services that is installed and has the folder. Presence is checked through a read-only mount of the whole volume first, because mounting the folder read-write would create it; only the folder itself is then mounted read-write, so nothing outside it can be touched. Deletes every row of the `history` table and runs `VACUUM`. Deletes `/config/archive.log` (every built-in preset records each download there, which is what skips repeats) and everything in `/config/logs`. Switches off every scheduled task (`tasks.enabled = 0`) rather than deleting it: with the archive gone, a task left on would download everything it covers again on its next run. Kept: the account, sessions, API keys, presets, conditions, notifications, task definitions, the yt-dlp user site, and StartOS backups.
+- *Cost:* seconds for a typical library. The service stays stopped afterwards.
+- *Repeat safety:* safe; a second run finds nothing to delete.
+- *Outputs:* the number of history entries and files deleted, the space freed, the places cleared, and the number of scheduled tasks switched off.
 
 ---
 
@@ -175,7 +207,7 @@ One check gates readiness: whether YTPTube's database is up.
 
 The endpoint is public and counts rows in the `users` table, so success means the web server is up **and** the database is queryable. A port check is not enough: YTPTube opens its port before its SQLite connection finishes initializing, and a UI opened in that window reports "Failed to load configuration". The probe sends no credentials on purpose — the user can change the account's username and password inside YTPTube, and a credentialed probe would then fail against a healthy service.
 
-Not ready during the first minute is normal: startup includes yt-dlp's online self-update check. A brief drop back to starting after that means the daemon restarted — one of its two processes exited (see [Image and Container Runtime](#image-and-container-runtime)); the logs show which. Staying not ready past the grace period points at the web server or the database; check the service logs.
+Not ready during the first minute is normal: startup includes yt-dlp's online self-update check, and after a change of yt-dlp release the start also downloads and installs it. A brief drop back to starting after that means the daemon restarted — one of its two processes exited (see [Image and Container Runtime](#image-and-container-runtime)); the logs show which. Staying not ready past the grace period points at the web server or the database; check the service logs.
 
 ---
 
@@ -197,8 +229,9 @@ A restored instance needs nothing further before use. If its destination service
 4. **One account.** YTPTube allows exactly one; it can be renamed and its password changed from inside the app, but no second account can be created.
 5. **A password changed inside YTPTube is not known to StartOS.** Reset Admin Password always restores access.
 6. **Upstream's single sign-on options are unavailable.** OIDC and trusted-proxy (`Remote-User`) sign-in are configured in a `config.toml` inside the `main` volume, which StartOS provides no way to edit.
-7. **Upstream settings that are only read from environment variables can't be changed** — for example filename trimming. The ones the package sets are listed under [File Models](#file-models).
+7. **Most upstream settings that are only read from environment variables can't be changed** — for example filename trimming. The exceptions are the ones in Download Settings and yt-dlp Settings; all the package sets are listed under [File Models](#file-models).
 8. **The in-app terminal is disabled**, because it executes commands on the server.
+9. **Deleting files with their history entries only works in the current destination.** YTPTube finds a download's file by its name under the *current* download folder, not the folder it was saved to. After a change of destination, deleting an earlier download leaves its file where it is, and deletes a different file of the same name in the new destination if one exists. Clear History does not have this problem: it empties every destination.
 
 ---
 
@@ -208,13 +241,13 @@ A restored instance needs nothing further before use. If its destination service
 package_id: ytptube
 image: ghcr.io/arabcoders/ytptube
 architectures: [x86_64, aarch64]
-subcontainers: [ytptube-sub, reset-password]
+subcontainers: [ytptube-sub, reset-password, ytdlp-reset, clear-history-probe, clear-history]
 volumes:
   startos: (not mounted)
   main: /config
   downloads: /downloads
-  filebrowser:data/ytptube-downloads: /mnt/filebrowser/ytptube-downloads # only when the destination is File Browser and it is installed
-  nextexplorer:data/YTPTube: /mnt/nextexplorer/YTPTube # only when the destination is NextExplorer and it is installed
+  filebrowser:data/ytptube-downloads: /mnt/filebrowser/ytptube-downloads # when the destination is File Browser and it is installed; also by Clear History when the folder exists
+  nextexplorer:data/YTPTube: /mnt/nextexplorer/YTPTube # when the destination is NextExplorer and it is installed; also by Clear History when the folder exists
 file_models:
   - store.json
 startos_managed_env_vars:
@@ -224,12 +257,24 @@ startos_managed_env_vars:
   - YTP_TEMP_PATH
   - YTP_AUTH_USERNAME
   - YTP_AUTH_PASSWORD
+user_settings_env_vars: # only once set by an action
+  - YTP_MAX_WORKERS
+  - YTP_MAX_WORKERS_PER_EXTRACTOR
+  - YTP_RETRY
+  - YTP_AUTO_CLEAR_HISTORY_DAYS
+  - YTP_REMOVE_FILES
+  - YTP_YTDLP_VERSION
+  - YTP_YTDLP_DEBUG
+  - YTP_LOG_LEVEL # debug, with YTP_YTDLP_DEBUG
 dependencies: [filebrowser, nextexplorer] # optional; only the chosen destination's
 interfaces:
   ui: { type: ui, port: 8081 }
 actions:
   - reset-admin-password
   - download-destination
+  - download-settings
+  - ytdlp-settings
+  - clear-history # only while stopped
 tasks:
   - { action: reset-admin-password, severity: important }
   - { action: download-destination, severity: important } # while the chosen destination is not installed
