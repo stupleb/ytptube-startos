@@ -48,6 +48,8 @@ Subcontainers:
 
 - **`ytptube-sub`** — everything that runs: a `setup` oneshot as root, then the `primary` daemon as the image's `app` user (uid 1000). Attach with `start-cli package attach ytptube -n ytptube-sub -- <cmd>`.
 - **`reset-password`** — a temporary subcontainer the Reset Admin Password action creates to run upstream's reset script against the database, then discards.
+- **`ytdlp-reset`** — a temporary subcontainer yt-dlp Settings creates to remove the yt-dlp user site's version stamp when the release choice changes.
+- **`clear-history-probe`**, **`clear-history`** — temporary subcontainers Clear History creates: the first looks for YTPTube's folder in each installed file manager, the second deletes.
 
 ---
 
@@ -58,10 +60,10 @@ Settings and history live in an embedded SQLite database on the `main` volume; d
 | Volume      | Mount point   | Contents                                                                                         |
 | ----------- | ------------- | ------------------------------------------------------------------------------------------------ |
 | `startos`   | not mounted   | `store.json` — see [File Models](#file-models)                                                   |
-| `main`      | `/config`     | `ytptube.db` (settings, history, the account and its sessions and API keys), presets, logs, and the packages yt-dlp self-updates into |
+| `main`      | `/config`     | `ytptube.db` (history, presets, scheduled tasks, and the account with its sessions and API keys), the download archive `archive.log`, logs, and the packages yt-dlp self-updates into |
 | `downloads` | `/downloads`  | Finished downloads, while the destination is Local Storage                                       |
 
-In-progress files and yt-dlp's scratch data go to the container's ephemeral `/tmp`, as does the token server's state. With another service as the destination, only one folder of its `data` volume is mounted, read-write; YTPTube's download and temp paths both point there, the local `downloads` volume sits idle, and YTPTube cannot see the rest of that service's files:
+In-progress files and yt-dlp's scratch data go to the container's ephemeral `/tmp`, as does the token server's state. With another service as the destination, only one folder of its `data` volume is mounted, read-write; YTPTube's download and temp paths both point there, so its in-progress downloads and a `thumbnails` folder of the previews it generates appear in that folder too; the local `downloads` volume sits idle, and YTPTube cannot see the rest of that service's files:
 
 | Destination  | Folder in its `data` volume | Mounted in YTPTube at                  |
 | ------------ | --------------------------- | -------------------------------------- |
@@ -80,7 +82,7 @@ Files are shared between the services without an idmap: StartOS mounts every vol
 
 ## File Models
 
-The package keeps one file of its own and configures YTPTube through environment variables; YTPTube's own settings are edited in its UI and stored in its database, which the package never writes.
+The package keeps one file of its own and configures YTPTube through environment variables; YTPTube's own settings are edited in its UI and stored in its database, which the package writes only through Reset Admin Password and Clear History.
 
 **`store.json`** (JSON, `startos` volume):
 
@@ -172,12 +174,12 @@ One action recovers access to the account and one chooses where downloads go; tw
 
 **yt-dlp Settings** — run it when YouTube downloads start failing and the fix is only in yt-dlp's nightly builds, to stay on one yt-dlp release, or to capture yt-dlp's detailed output for troubleshooting.
 
-- *Changes:* `ytdlpVersion` and `ytdlpDebug` in `store.json`. YTPTube's upgrader installs the chosen yt-dlp into a user site under `/config` (`python<version>-packages`) on each start: Stable takes the newest release, Nightly follows the newest nightly on every start, and a specific version stays put. When the release choice changes, the action also removes that folder's `.version` stamp, so on the next start the upgrader clears everything it installed and installs the new choice from scratch. Without that, going from a specific version back to Stable keeps the old version, because upstream's check reads the image's bundled copy rather than the installed one. Specific versions must be release numbers (`2026.08.19`); the handler checks this as well as the form, since a text field's pattern is enforced by the form only.
+- *Changes:* `ytdlpVersion` and `ytdlpDebug` in `store.json`. YTPTube's upgrader installs the chosen yt-dlp into a user site under `/config` (`python<version>-packages`) on each start: Stable takes the newest release, Nightly follows the newest nightly on every start, and a specific version stays put. When the release choice changes, the action also removes that folder's `.version` stamp, so on the next start the upgrader clears everything it installed and installs the new choice from scratch. Without that, going from a specific version back to Stable keeps the old version, because upstream's check reads the image's bundled copy rather than the installed one. Specific versions must be yt-dlp release numbers (`YYYY.MM.DD`); the handler checks this as well as the form, since a text field's pattern is enforced by the form only.
 - *Cost:* the daemon restarts. A start that installs a different yt-dlp takes longer while it downloads from PyPI.
 - *Repeat safety:* idempotent. Saving the same release again resets nothing.
 - *Outputs:* none. With verbose logging on, the service logs carry googlevideo URLs, which embed the server's public IP.
 
-**Clear History** — an emergency wipe of everything YTPTube has downloaded and every record of it, to free the space in one step or to remove all traces. Run it with the service stopped.
+**Clear History** — an emergency wipe of everything YTPTube has downloaded and every record of it, to free the space in one step or to remove all traces.
 
 - *Changes:* deletes everything inside `/downloads`, and inside YTPTube's folder in File Browser's and NextExplorer's `data` volumes, for each of those services that is installed and has the folder. Presence is checked through a read-only mount of the whole volume first, because mounting the folder read-write would create it; only the folder itself is then mounted read-write, so nothing outside it can be touched. Deletes every row of the `history` table and runs `VACUUM`. Deletes `/config/archive.log` (every built-in preset records each download there, which is what skips repeats) and everything in `/config/logs`. Switches off every scheduled task (`tasks.enabled = 0`) rather than deleting it: with the archive gone, a task left on would download everything it covers again on its next run. Kept: the account, sessions, API keys, presets, conditions, notifications, task definitions, the yt-dlp user site, and StartOS backups.
 - *Cost:* seconds for a typical library. The service stays stopped afterwards.
@@ -274,7 +276,7 @@ actions:
   - download-destination
   - download-settings
   - ytdlp-settings
-  - clear-history # only while stopped
+  - clear-history
 tasks:
   - { action: reset-admin-password, severity: important }
   - { action: download-destination, severity: important } # while the chosen destination is not installed
