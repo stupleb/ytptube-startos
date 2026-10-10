@@ -67,10 +67,17 @@ const dict = {
   // actions/clearHistory.ts
   'Clear History': 49,
   'Erase the download history and every file YTPTube has downloaded': 50,
-  'This permanently deletes every file YTPTube has downloaded, in its own storage and in its folders in File Browser and NextExplorer, along with the download history, the download archive and the logs. Scheduled tasks are switched off, not deleted. Your account, presets and settings are kept, and existing StartOS backups are not touched. This cannot be undone.': 51,
+  "This permanently deletes everything in YTPTube's own storage, in its folder in File Browser and in the ${location} location in NextExplorer, along with the download history, the download archive and the logs. Scheduled tasks are switched off, not deleted. Your account, presets and settings are kept, and existing StartOS backups are not touched. This cannot be undone.": 51,
   'History entries deleted: ${entries}. Files deleted: ${files} (${size}), from ${locations}. The download archive and logs were erased.': 52,
   'Scheduled tasks switched off: ${tasks}. Turn them back on in YTPTube when you want them to run again.': 53,
   'History Cleared': 54,
+
+  // actions/downloadDestination.ts (NextExplorer location)
+  'NextExplorer Location': 55,
+  'The NextExplorer location YTPTube saves into, added to NextExplorer if it does not exist. Use a location that only YTPTube saves into: Clear History deletes everything in it. If you rename the location in NextExplorer, enter its new name here.': 56,
+  'Cannot start with a dot or contain a slash': 57,
+  'Install NextExplorer first.': 58,
+  'Update NextExplorer to 3.1.0:2 or later first.': 59,
 } as const
 
 /**

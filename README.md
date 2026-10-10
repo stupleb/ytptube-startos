@@ -42,14 +42,14 @@ The package runs upstream's published image as-is, in one subcontainer that host
 
 The image's entrypoint is `tini`, which runs a script that checks `/config` and the download path are writable, then starts **two processes side by side**: YTPTube itself (Python) and the bundled bgutil **YouTube PO-token server** (Deno, listening on port 4416 inside the container). yt-dlp asks that server for the proof-of-origin tokens YouTube requires for many videos. If either process exits, the script stops the other and exits, and StartOS restarts the daemon — so a crashed token server shows up as a brief restart, not as YouTube downloads quietly failing. The token server costs memory: measured at roughly 160 MB resident, somewhat more than YTPTube itself.
 
-The daemon is launched with `runAsInit`, which makes `tini` the subcontainer's PID 1. Without it, `tini` runs under StartOS's own launcher, warns on every start that it is not PID 1, and cannot reap the processes yt-dlp leaves orphaned (ffmpeg and friends).
+The daemon is launched with `runAsInit`, which makes `tini` the subcontainer's PID 1. Without it, `tini` runs under StartOS's own launcher and warns on every start that it is not PID 1.
 
 Subcontainers:
 
 - **`ytptube-sub`** — everything that runs: a `setup` oneshot as root, then the `primary` daemon as the image's `app` user (uid 1000). Attach with `start-cli package attach ytptube -n ytptube-sub -- <cmd>`.
 - **`reset-password`** — a temporary subcontainer the Reset Admin Password action creates to run upstream's reset script against the database, then discards.
 - **`ytdlp-reset`** — a temporary subcontainer yt-dlp Settings creates to remove the yt-dlp user site's version stamp when the release choice changes.
-- **`clear-history-probe`**, **`clear-history`** — temporary subcontainers Clear History creates: the first looks for YTPTube's folder in each installed file manager, the second deletes.
+- **`clear-history-probe`**, **`clear-history`** — temporary subcontainers Clear History creates: the first looks for YTPTube's folder or location in each installed file manager, the second deletes.
 
 ---
 
@@ -68,15 +68,15 @@ In-progress files and yt-dlp's scratch data go to the container's ephemeral `/tm
 | Destination  | Folder in its `data` volume | Mounted in YTPTube at                  |
 | ------------ | --------------------------- | -------------------------------------- |
 | File Browser | `ytptube-downloads`         | `/mnt/filebrowser/ytptube-downloads`   |
-| NextExplorer | `YTPTube`                   | `/mnt/nextexplorer/YTPTube`            |
+| NextExplorer | the chosen location, `YTPTube` by default | `/mnt/nextexplorer/YTPTube` |
 
-NextExplorer shows each top-level folder of its volume as a drive, so the NextExplorer folder appears there as a drive named YTPTube.
+NextExplorer lists each top-level folder of its volume as a location. YTPTube saves into the one chosen in Select Download Destination, mounted at the same path inside YTPTube whatever it is called, so the paths YTPTube has stored keep working when it is pointed at a location under a new name. YTPTube does not follow a location renamed in NextExplorer: a running YTPTube keeps saving into it, but its next start creates an empty location under the old name and saves there until the new name is entered in Select Download Destination. A location removed in NextExplorer can't be saved into until YTPTube's next start, which creates it again, empty.
 
 While the chosen service is **not installed**, YTPTube saves to the local `downloads` volume instead and raises a prompt (see [Tasks](#tasks)). It never writes into the folder then, because an uninstalled service's volume is shown by nothing. The stored choice is kept, so reinstalling the service switches YTPTube back to it automatically. Starting or stopping that service does not restart YTPTube; only installing or uninstalling it does.
 
 A service counts as installed as soon as its install or restore begins, before its volume exists. If YTPTube finds the volume missing then, it saves locally too and tries the mount again after 30 seconds, doubling the wait each time up to five minutes, until the volume appears. Each attempt restarts YTPTube, and the logs say "not ready yet" while it waits.
 
-Files are shared between the services without an idmap: StartOS mounts every volume in one shared id space, and YTPTube's `app`, File Browser's user and NextExplorer's server all run as uid 1000, so each natively owns what the other writes. The `setup` oneshot runs before the daemon on every start and chowns `/config` to `app` recursively, along with either `/downloads` (recursively) or the destination folder itself, which it also sets to mode `755`. The host creates that folder root-owned on first mount; the oneshot is what hands it to `app`, and a root-owned folder would be listed by the other service but unwritable there.
+Files are shared between the services without an idmap: StartOS mounts every volume in one shared id space, and YTPTube's `app`, File Browser's user and NextExplorer's server all run as uid 1000, so each natively owns what the other writes. The `setup` oneshot runs before the daemon on every start and chowns `/config` to `app` recursively, along with either `/downloads` (recursively) or the destination folder itself, which it also sets to mode `755`. The host creates a missing folder root-owned when it mounts it: File Browser's on first use, and a NextExplorer location only after it was renamed or removed, since Select Download Destination creates it through NextExplorer. The oneshot is what hands it to `app`; a root-owned folder would be listed by the other service but unwritable there.
 
 ---
 
@@ -88,6 +88,7 @@ The package keeps one file of its own and configures YTPTube through environment
 
 - `adminPassword` — generated at install; rewritten only by Reset Admin Password. It is passed to YTPTube as `YTP_AUTH_PASSWORD`, which YTPTube reads **only while it has no account yet** (see below). After the first boot the database owns the password, so this copy goes stale if the user changes the password inside YTPTube. Reset Admin Password brings the two back into step.
 - `downloadDestination` — `local`, `filebrowser` or `nextexplorer`, written by Select Download Destination; read on every start to pick the mounts and the dependency. It is the user's choice and is never rewritten by the fallback described under [Volume and Data Layout](#volume-and-data-layout).
+- `nextexplorerLocation` — the NextExplorer location to save into, written by Select Download Destination when NextExplorer is chosen. Absent means `YTPTube`, the location every earlier version used. It is kept while another destination is selected.
 - `maxWorkers`, `maxWorkersPerExtractor`, `retry`, `autoClearHistoryDays`, `removeFiles` — written by Download Settings. `ytdlpVersion` (`stable`, `nightly`, or a release number) and `ytdlpDebug` — written by yt-dlp Settings. All are absent until their action is first saved, and while absent YTPTube's own defaults apply. They belong to the user; the package only reads them, on every start.
 
 **Environment variables**, re-asserted on every start:
@@ -123,9 +124,9 @@ YTPTube depends on nothing unless File Browser or NextExplorer is chosen as the 
 | Dependency   | Required                          | Health checks required                   | Mount |
 | ------------ | --------------------------------- | ---------------------------------------- | ----- |
 | File Browser | Only while it is the destination  | None — it must be installed, not running | `ytptube-downloads` from its `data` volume at `/mnt/filebrowser/ytptube-downloads`, read-write |
-| NextExplorer | Only while it is the destination  | None — it must be installed, not running | `YTPTube` from its `data` volume at `/mnt/nextexplorer/YTPTube`, read-write |
+| NextExplorer | Only while it is the destination  | None — it must be installed, not running | The chosen location from its `data` volume at `/mnt/nextexplorer/YTPTube`, read-write |
 
-Each is needed only as a place to put files, so it can be stopped while YTPTube runs. Either package that ships under the `filebrowser` id satisfies the File Browser dependency — the original File Browser or its successor, FileBrowser Quantum. All three expose a `data` volume and run as uid 1000, which the shared-ownership scheme above relies on.
+Each is needed only as a place to put files, so it can be stopped while YTPTube runs. Either package that ships under the `filebrowser` id satisfies the File Browser dependency — the original File Browser or its successor, FileBrowser Quantum. All three expose a `data` volume and run as uid 1000, which the shared-ownership scheme above relies on. NextExplorer must be 3.1.0:2 or later, the first release that lets another service run its Add Location action.
 
 ---
 
@@ -160,9 +161,9 @@ One action recovers access to the account and one chooses where downloads go; tw
 - *Repeat safety:* safe; each run issues a new password and signs everyone out again.
 - *Outputs:* the account's username and the new password.
 
-**Select Download Destination** — choose Local Storage, File Browser, or NextExplorer. Also the target of the prompt raised while the chosen service is not installed.
+**Select Download Destination** — choose Local Storage, File Browser, or NextExplorer, and for NextExplorer the location to save into. Also the way to point YTPTube at its location after it was renamed in NextExplorer, and the target of the prompt raised while the chosen service is not installed.
 
-- *Changes:* `downloadDestination` in `store.json`, which changes the mounts and which service, if any, is declared as a dependency. Existing downloads are not moved, and downloads still queued keep the path they were queued with, so they fail once it is no longer mounted.
+- *Changes:* `downloadDestination`, and for NextExplorer `nextexplorerLocation`, in `store.json`, which changes the mounts and which service, if any, is declared as a dependency. For NextExplorer it first runs NextExplorer's Add Location action for the name, after declaring NextExplorer as a dependency for the call. That creates the location owned by uid 1000, or accepts it if it exists; NextExplorer's naming rules apply, and a name it rejects leaves the previous choice in place. It refuses NextExplorer while NextExplorer is not installed or older than 3.1.0:2. Existing downloads are not moved, and downloads still queued keep the path they were queued with, so they fail once it is no longer mounted.
 - *Cost:* the daemon restarts to apply it.
 - *Repeat safety:* idempotent.
 
@@ -174,15 +175,15 @@ One action recovers access to the account and one chooses where downloads go; tw
 
 **yt-dlp Settings** — run it when YouTube downloads start failing and the fix is only in yt-dlp's nightly builds, to stay on one yt-dlp release, or to capture yt-dlp's detailed output for troubleshooting.
 
-- *Changes:* `ytdlpVersion` and `ytdlpDebug` in `store.json`. YTPTube's upgrader installs the chosen yt-dlp into a user site under `/config` (`python<version>-packages`) on each start: Stable takes the newest release, Nightly follows the newest nightly on every start, and a specific version stays put. When the release choice changes, the action also removes that folder's `.version` stamp, so on the next start the upgrader clears everything it installed and installs the new choice from scratch. Without that, going from a specific version back to Stable keeps the old version, because upstream's check reads the image's bundled copy rather than the installed one. Specific versions must be yt-dlp release numbers (`YYYY.MM.DD`); the handler checks this as well as the form, since a text field's pattern is enforced by the form only.
+- *Changes:* `ytdlpVersion` and `ytdlpDebug` in `store.json`. YTPTube's upgrader installs the chosen yt-dlp into a user site under `/config` (`python<version>-packages`) on each start: Stable takes the newest release, Nightly follows the newest nightly on every start, and a specific version stays put. When the release choice changes, the action also removes that folder's `.version` stamp, so on the next start the upgrader clears everything it installed and installs the new choice from scratch. Without that, going from a specific version back to Stable keeps the old version, because upstream's check reads the image's bundled copy rather than the installed one. Specific versions must be yt-dlp release numbers (`YYYY.MM.DD`).
 - *Cost:* the daemon restarts. A start that installs a different yt-dlp takes longer while it downloads from PyPI.
 - *Repeat safety:* idempotent. Saving the same release again resets nothing.
 - *Outputs:* none. With verbose logging on, the service logs carry googlevideo URLs, which embed the server's public IP.
 
 **Clear History** — an emergency wipe of everything YTPTube has downloaded and every record of it, to free the space in one step or to remove all traces.
 
-- *Changes:* deletes everything inside `/downloads`, and inside YTPTube's folder in File Browser's and NextExplorer's `data` volumes, for each of those services that is installed and has the folder. Presence is checked through a read-only mount of the whole volume first, because mounting the folder read-write would create it; only the folder itself is then mounted read-write, so nothing outside it can be touched. Deletes every row of the `history` table and runs `VACUUM`. Deletes `/config/archive.log` (every built-in preset records each download there, which is what skips repeats) and everything in `/config/logs`. Switches off every scheduled task (`tasks.enabled = 0`) rather than deleting it: with the archive gone, a task left on would download everything it covers again on its next run. Kept: the account, sessions, API keys, presets, conditions, notifications, task definitions, the yt-dlp user site, and StartOS backups.
-- *Cost:* seconds for a typical library. The service stays stopped afterwards.
+- *Changes:* deletes everything inside `/downloads`, inside YTPTube's folder in File Browser's `data` volume, and inside the chosen NextExplorer location, whatever else was saved there, for each of those services that is installed and has it. The action's warning names that location. Presence is checked through a read-only mount of the whole volume first, because mounting the folder read-write would create it; only the folder itself is then mounted read-write, so nothing outside it can be touched. Deletes every row of the `history` table and runs `VACUUM`. Deletes `/config/archive.log` (every built-in preset records each download there, which is what skips repeats) and everything in `/config/logs`. Switches off every scheduled task (`tasks.enabled = 0`) rather than deleting it: with the archive gone, a task left on would download everything it covers again on its next run. Kept: the account, sessions, API keys, presets, conditions, notifications, task definitions, the yt-dlp user site, and StartOS backups.
+- *Cost:* seconds for a typical library, longer for a large one: the deletions run without a time limit. The service stays stopped afterwards.
 - *Repeat safety:* safe; a second run finds nothing to delete.
 - *Outputs:* the number of history entries and files deleted, the space freed, the places cleared, and the number of scheduled tasks switched off.
 
@@ -226,14 +227,15 @@ A restored instance needs nothing further before use. If its destination service
 ## Limitations and Differences
 
 1. **The download destination is either/or.** While File Browser or NextExplorer is selected, it is the only place downloads go; it is not an extra folder alongside local downloads, because YTPTube confines downloads to one base path. Switching leaves already-saved files where they are.
-2. **In NextExplorer, only the admin account sees the YTPTube drive automatically.** Other NextExplorer accounts see it only once it is granted to them in NextExplorer's user settings.
-3. **Local downloads are not backed up** — see [Backups and Restore](#backups-and-restore).
-4. **One account.** YTPTube allows exactly one; it can be renamed and its password changed from inside the app, but no second account can be created.
-5. **A password changed inside YTPTube is not known to StartOS.** Reset Admin Password always restores access.
-6. **Upstream's single sign-on options are unavailable.** OIDC and trusted-proxy (`Remote-User`) sign-in are configured in a `config.toml` inside the `main` volume, which StartOS provides no way to edit.
-7. **Most upstream settings that are only read from environment variables can't be changed** — for example filename trimming. The exceptions are the ones in Download Settings and yt-dlp Settings; all the package sets are listed under [File Models](#file-models).
-8. **The in-app terminal is disabled**, because it executes commands on the server.
-9. **Deleting files with their history entries only works in the current destination.** YTPTube finds a download's file by its name under the *current* download folder, not the folder it was saved to. After a change of destination, deleting an earlier download leaves its file where it is, and deletes a different file of the same name in the new destination if one exists. Clear History does not have this problem: it empties every destination.
+2. **In NextExplorer, only the admin account sees YTPTube's location automatically.** Other NextExplorer accounts see it only once it is granted to them in NextExplorer's user settings.
+3. **A location renamed in NextExplorer is not followed.** Select Download Destination has to be given the new name; until then YTPTube saves into a new, empty location under the old name from its next start.
+4. **Local downloads are not backed up** — see [Backups and Restore](#backups-and-restore).
+5. **One account.** YTPTube allows exactly one; it can be renamed and its password changed from inside the app, but no second account can be created.
+6. **A password changed inside YTPTube is not known to StartOS.** Reset Admin Password always restores access.
+7. **Upstream's single sign-on options are unavailable.** OIDC and trusted-proxy (`Remote-User`) sign-in are configured in a `config.toml` inside the `main` volume, which StartOS provides no way to edit.
+8. **Most upstream settings that are only read from environment variables can't be changed** — for example filename trimming. The exceptions are the ones in Download Settings and yt-dlp Settings; all the package sets are listed under [File Models](#file-models).
+9. **The in-app terminal is disabled**, because it executes commands on the server.
+10. **Deleting files with their history entries only works in the current destination.** YTPTube finds a download's file by its name under the *current* download folder, not the folder it was saved to. After a change of destination, deleting an earlier download leaves its file where it is, and deletes a different file of the same name in the new destination if one exists. Clear History does not have this problem: it empties every destination.
 
 ---
 
@@ -249,7 +251,7 @@ volumes:
   main: /config
   downloads: /downloads
   filebrowser:data/ytptube-downloads: /mnt/filebrowser/ytptube-downloads # when the destination is File Browser and it is installed; also by Clear History when the folder exists
-  nextexplorer:data/YTPTube: /mnt/nextexplorer/YTPTube # when the destination is NextExplorer and it is installed; also by Clear History when the folder exists
+  nextexplorer:data/<location>: /mnt/nextexplorer/YTPTube # the chosen location (YTPTube by default), when the destination is NextExplorer and it is installed; also by Clear History when the location exists
 file_models:
   - store.json
 startos_managed_env_vars:
@@ -268,7 +270,7 @@ user_settings_env_vars: # only once set by an action
   - YTP_YTDLP_VERSION
   - YTP_YTDLP_DEBUG
   - YTP_LOG_LEVEL # debug, with YTP_YTDLP_DEBUG
-dependencies: [filebrowser, nextexplorer] # optional; only the chosen destination's
+dependencies: [filebrowser, nextexplorer] # optional; only the chosen destination's; nextexplorer >=3.1.0:2
 interfaces:
   ui: { type: ui, port: 8081 }
 actions:

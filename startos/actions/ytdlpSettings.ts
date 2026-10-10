@@ -17,8 +17,7 @@ const { InputSpec, Value, Variants } = sdk
 // choice changes, the handler removes the user site's version stamp: on the
 // next start the upgrader then clears everything it installed and installs the
 // new choice from scratch.
-// A yt-dlp release number. Also checked in the handler: a text field's pattern
-// is enforced by the form only, not on input sent to the action directly.
+// A yt-dlp release number.
 const releaseVersion = '^\\d{4}\\.\\d{1,2}\\.\\d{1,2}(\\.\\d{1,2})?$'
 
 export const inputSpec = InputSpec.of({
@@ -108,11 +107,6 @@ export const ytdlpSettings = sdk.Action.withInput(
       input.release.selection === 'specific'
         ? input.release.value.version
         : input.release.selection
-    if (
-      input.release.selection === 'specific' &&
-      !new RegExp(releaseVersion).test(ytdlpVersion)
-    )
-      throw new Error(i18n('A release version, such as 2026.08.19'))
     const previous =
       (await store.read((s) => s.ytdlpVersion).once()) ?? 'stable'
     if (ytdlpVersion !== previous)

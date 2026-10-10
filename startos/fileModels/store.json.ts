@@ -14,6 +14,9 @@ const shape = z.looseObject({
     .enum(['local', 'filebrowser', 'nextexplorer'])
     .optional()
     .catch(undefined),
+  // The NextExplorer location to save into. Undefined is treated as the
+  // default in destinations.ts.
+  nextexplorerLocation: z.string().optional().catch(undefined),
 
   // Download Settings (actions/downloadSettings.ts), each passed to YTPTube as
   // the YTP_* variable named alongside. Undefined leaves upstream's default.
