@@ -135,7 +135,10 @@ export const main = sdk.setupMain(async ({ effects }) => {
         ? localMounts.mountDependency<typeof nextexplorerManifest>({
             dependencyId: 'nextexplorer',
             volumeId: 'data',
-            subpath: destinations.nextexplorer.subpath,
+            subpath:
+              (await store
+                .read((s) => s.nextexplorerLocation)
+                .const(effects)) ?? destinations.nextexplorer.defaultLocation,
             mountpoint: destinations.nextexplorer.mountpoint,
             readonly: false,
           })
@@ -153,10 +156,8 @@ export const main = sdk.setupMain(async ({ effects }) => {
     // Materialize here rather than on the setup oneshot's first run. The
     // service counts as installed from the moment its install or restore
     // begins, before its volume exists, and StartOS refuses to mount a volume
-    // that doesn't exist. Failing inside the oneshot would be permanent: the
-    // lazy handle caches a rejected materialization, so every retry fails the
-    // same way. Here it can fall back to local storage and try again later —
-    // nothing else re-runs main when that install finishes.
+    // that doesn't exist. Here it can fall back to local storage and try again
+    // later: nothing else re-runs main when that install finishes.
     try {
       await remote.eager()
       sub = remote
@@ -219,10 +220,8 @@ export const main = sdk.setupMain(async ({ effects }) => {
       exec: {
         command: sdk.useEntrypoint(),
         // Launch the entrypoint as the subcontainer's PID 1. That entrypoint is
-        // tini, which otherwise runs under StartOS's launcher, warns on every
-        // start that it is not PID 1, and cannot reap the processes yt-dlp
-        // orphans (ffmpeg and friends). The setup oneshot is unaffected: it
-        // exits before this daemon starts.
+        // tini, which otherwise warns on every start that it is not PID 1. The
+        // setup oneshot is unaffected: it exits before this daemon starts.
         runAsInit: true,
         env: {
           YTP_BROWSER_CONTROL_ENABLED: 'true',

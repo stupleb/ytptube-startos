@@ -45,12 +45,14 @@ If you already run the older File Browser, it works too, but it is no longer mai
 ### NextExplorer
 
 1. Install **NextExplorer** from the Marketplace.
-2. On YTPTube's **Actions & Config** tab, run **Select Download Destination** and choose **NextExplorer**.
-3. YTPTube restarts, and from then on every download goes into a drive called **YTPTube** in NextExplorer.
+2. On YTPTube's **Actions & Config** tab, run **Select Download Destination** and choose **NextExplorer**. **NextExplorer Location** is the location YTPTube saves into, **YTPTube** unless you change it. Pick one that only YTPTube uses, because **Clear History** deletes everything in it.
+3. YTPTube adds the location to NextExplorer if it isn't there yet and restarts. From then on every download goes into it.
 
-NextExplorer's admin account sees the YTPTube drive straight away. To let another NextExplorer account see it, go to **Settings → Admin → Users** in NextExplorer, open that account's **Volumes** tab, and add the drive.
+NextExplorer's admin account sees the location straight away. To let another NextExplorer account see it, go to **Settings → Admin → Users** in NextExplorer, open that account's **Volumes** tab, and add the location.
 
-**Moving from File Browser to NextExplorer?** NextExplorer's **Import Files from File Browser** action copies your existing downloads into its FileBrowser drive. Then choose **NextExplorer** here, so new downloads go to the YTPTube drive, before you uninstall File Browser.
+**Renamed the location in NextExplorer?** Run **Select Download Destination** again and enter the new name. Otherwise, the next time YTPTube starts, it creates a new, empty location with the old name and saves there. If you remove the location in NextExplorer, restart YTPTube: downloads can't be saved until it has created the location again, empty.
+
+**Moving from File Browser to NextExplorer?** NextExplorer's **Import Files from File Browser** action copies your existing downloads into its FileBrowser location. Then choose **NextExplorer** here, so new downloads go to YTPTube's location, before you uninstall File Browser.
 
 ### Either way
 
@@ -77,7 +79,7 @@ YouTube changes often, and YTPTube updates yt-dlp, the tool that does the downlo
 
 ## Erasing everything YTPTube has downloaded
 
-**Clear History** deletes every file YTPTube has downloaded, in its own storage and in its folders in File Browser and NextExplorer, along with the download history and logs. Stop YTPTube first; the action is available only while it is stopped. Your account, presets and settings are kept. Scheduled downloads are switched off so they don't start downloading everything again; turn them back on in YTPTube when you want them.
+**Clear History** deletes everything in YTPTube's own storage, in its folder in File Browser and in its location in NextExplorer, along with the download history and logs. Stop YTPTube first; the action is available only while it is stopped. Your account, presets and settings are kept. Scheduled downloads are switched off so they don't start downloading everything again; turn them back on in YTPTube when you want them.
 
 ## Backups
 
