@@ -1,43 +1,42 @@
-import { T } from '@start9labs/start-sdk'
 import { store } from './fileModels/store.json'
+import {
+  filebrowserDescription,
+  nextexplorerDescription,
+} from './manifest/i18n'
 import { sdk } from './sdk'
 
-export const setDependencies = sdk.setupDependencies(async ({ effects }) => {
-  const downloadDestination =
-    (await store.read((s) => s.downloadDestination).const(effects)) ?? 'local'
+// The first NextExplorer release that lets other services run its Add Location.
+export const nextexplorerVersionRange = '>=3.1.0:2'
 
-  const deps: T.CurrentDependenciesResult<any> = {}
-
-  // Only require File Browser when it's the chosen download location. `exists`
-  // (not `running`) — we only need its data volume present to write into.
-  //
-  // Two packages ship under the `filebrowser` id: the original
-  // filebrowser/filebrowser line (end of life) and its successor FileBrowser
-  // Quantum, whose versions carry a `#quantum` flavor. Quantum declares
-  // `satisfies('2.63.23:2')` and the StartOS UI honours it, so an unflavored
-  // range alone would match Quantum there — but a flavored version satisfies
-  // no unflavored range on its own, and not every check consults `satisfies`
-  // (SDK 2.0.9's `checkDependencies().satisfied()` does not). Naming both
-  // lines matches either, everywhere. Both expose the `data` volume we mount
-  // and both run as uid 1000 (verified in filebrowser/filebrowser's Dockerfile
-  // and in the gtstef/filebrowser image), which is what lets main.ts share
-  // files with YTPTube's `app` user without an idmap.
-  if (downloadDestination === 'filebrowser') {
-    deps['filebrowser'] = {
-      kind: 'exists',
+// Each is enabled only while it is the chosen download destination, and needs
+// only to exist: YTPTube writes into its `data` volume whether it runs or not.
+export const dependencies = sdk.Dependencies.of()
+  .addDependency(
+    sdk.Dependency.optional('filebrowser', {
+      description: filebrowserDescription,
+      metadata: {
+        title: 'File Browser',
+        icon: 'https://raw.githubusercontent.com/Start9Labs/filebrowser-startos/fbf1fefb51cca9731f2a9a9e6f790ca150aa9d04/icon.svg',
+      },
+      // FileBrowser Quantum ships under the same id, with `#quantum` versions.
       versionRange: '>=2.63.2:0 || >=#quantum:1.5.2:0',
-    }
-  }
-
-  // Same shape for NextExplorer: `exists`, since only its `data` volume is
-  // needed. It mounts that volume at /mnt and chowns it to uid 1000 on every
-  // start, the same uid as YTPTube's `app`.
-  if (downloadDestination === 'nextexplorer') {
-    deps['nextexplorer'] = {
       kind: 'exists',
-      versionRange: '>=2.2.7:0',
-    }
-  }
-
-  return deps
-})
+      enabled: async ({ effects }) =>
+        (await store.read((s) => s.downloadDestination).const(effects)) ===
+        'filebrowser',
+    }),
+  )
+  .addDependency(
+    sdk.Dependency.optional('nextexplorer', {
+      description: nextexplorerDescription,
+      metadata: {
+        title: 'NextExplorer',
+        icon: 'https://raw.githubusercontent.com/Start9Labs/nextexplorer-startos/d8588c6874e0f7e5ca1e160dc58e1fcf06c0ef59/icon.svg',
+      },
+      versionRange: nextexplorerVersionRange,
+      kind: 'exists',
+      enabled: async ({ effects }) =>
+        (await store.read((s) => s.downloadDestination).const(effects)) ===
+        'nextexplorer',
+    }),
+  )

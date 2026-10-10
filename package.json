@@ -1,25 +1,11 @@
 {
   "name": "ytptube-startos",
-  "scripts": {
-    "build": "rm -rf ./javascript && ncc build startos/index.ts -o ./javascript",
-    "prettier": "prettier --write startos",
-    "check": "tsc --noEmit"
-  },
   "dependencies": {
-    "@start9labs/start-sdk": "2.0.9",
-    "filebrowser-startos": "github:Start9Labs/filebrowser-startos#907bef254151e943e8b88554c46a785675e42c97",
-    "nextexplorer-startos": "github:Start9Labs/nextexplorer-startos#d8588c6874e0f7e5ca1e160dc58e1fcf06c0ef59"
+    "@start9labs/start-sdk": "3.0.4",
+    "filebrowser-startos": "github:Start9Labs/filebrowser-startos#next",
+    "nextexplorer-startos": "github:Start9Labs/nextexplorer-startos#next"
   },
-  "devDependencies": {
-    "@types/node": "^22.19.0",
-    "@vercel/ncc": "^0.38.4",
-    "prettier": "^3.6.2",
-    "typescript": "^6.0.3"
-  },
-  "prettier": {
-    "trailingComma": "all",
-    "tabWidth": 2,
-    "semi": false,
-    "singleQuote": true
+  "overrides": {
+    "@start9labs/start-sdk": "$@start9labs/start-sdk"
   }
 }

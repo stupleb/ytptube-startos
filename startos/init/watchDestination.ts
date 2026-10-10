@@ -40,8 +40,8 @@ export const watchDestination = sdk.setupOnInit(async (effects) => {
       kind: 'partial',
       accept: (['local', 'filebrowser', 'nextexplorer'] as const)
         .filter((d) => d !== destination)
-        .map((d) => ({ downloadDestination: d })),
-      set: { downloadDestination: 'local' },
+        .map((d) => ({ downloadDestination: { selection: d } })),
+      set: { downloadDestination: { selection: 'local' } },
     },
     reason:
       destination === 'filebrowser'

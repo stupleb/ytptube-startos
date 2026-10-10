@@ -13,9 +13,10 @@ export const destinations = {
   },
   nextexplorer: {
     packageId: 'nextexplorer',
-    // NextExplorer shows each top-level folder of its `data` volume as a drive,
-    // so this appears there as a drive named YTPTube.
-    subpath: 'YTPTube',
+    // NextExplorer lists each top-level folder of its `data` volume as a
+    // location. This one is used until Select Download Destination names another.
+    defaultLocation: 'YTPTube',
+    // Fixed whatever the location is called, for the same reason as above.
     mountpoint: '/mnt/nextexplorer/YTPTube',
   },
 } as const
@@ -29,7 +30,7 @@ export type Destination = 'local' | RemoteDestination
 // merely started or stopped. Mapping the status to a boolean lets Watchable's
 // dedup ignore everything but install and uninstall. The OS returns no status
 // only for a package that is not installed; an update keeps the entry.
-export class PackageInstalled extends utils.Watchable<
+export class PackageInstalled extends utils.MappedWatchable<
   T.StatusInfo | null,
   boolean
 > {
@@ -42,7 +43,7 @@ export class PackageInstalled extends utils.Watchable<
     super(effects, { map: (status) => status !== null })
   }
 
-  protected fetch(callback?: () => void) {
+  protected fetchRaw(callback?: () => void) {
     return this.effects.getStatus({ packageId: this.packageId, callback })
   }
 }

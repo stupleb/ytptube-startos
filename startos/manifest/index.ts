@@ -1,10 +1,5 @@
 import { setupManifest } from '@start9labs/start-sdk'
-import {
-  long,
-  short,
-  filebrowserDescription,
-  nextexplorerDescription,
-} from './i18n'
+import { long, short } from './i18n'
 
 export const manifest = setupManifest({
   id: 'ytptube',
@@ -20,24 +15,6 @@ export const manifest = setupManifest({
     ytptube: {
       source: { dockerTag: 'ghcr.io/arabcoders/ytptube:v2.7.4' },
       arch: ['x86_64', 'aarch64'],
-    },
-  },
-  dependencies: {
-    filebrowser: {
-      description: filebrowserDescription,
-      optional: true,
-      metadata: {
-        title: 'File Browser',
-        icon: 'https://raw.githubusercontent.com/Start9Labs/filebrowser-startos/fbf1fefb51cca9731f2a9a9e6f790ca150aa9d04/icon.svg',
-      },
-    },
-    nextexplorer: {
-      description: nextexplorerDescription,
-      optional: true,
-      metadata: {
-        title: 'NextExplorer',
-        icon: 'https://raw.githubusercontent.com/Start9Labs/nextexplorer-startos/d8588c6874e0f7e5ca1e160dc58e1fcf06c0ef59/icon.svg',
-      },
     },
   },
 })

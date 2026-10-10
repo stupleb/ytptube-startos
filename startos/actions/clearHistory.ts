@@ -1,6 +1,7 @@
 import { manifest as filebrowserManifest } from 'filebrowser-startos/startos/manifest'
 import { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
 import { destinations, RemoteDestination } from '../destinations'
+import { store } from '../fileModels/store.json'
 import { i18n } from '../i18n'
 import { sdk } from '../sdk'
 import { dbFile } from '../utils'
@@ -45,7 +46,12 @@ export const clearHistory = sdk.Action.withoutInput(
       'Erase the download history and every file YTPTube has downloaded',
     ),
     warning: i18n(
-      'This permanently deletes every file YTPTube has downloaded, in its own storage and in its folders in File Browser and NextExplorer, along with the download history, the download archive and the logs. Scheduled tasks are switched off, not deleted. Your account, presets and settings are kept, and existing StartOS backups are not touched. This cannot be undone.',
+      "This permanently deletes everything in YTPTube's own storage, in its folder in File Browser and in the ${location} location in NextExplorer, along with the download history, the download archive and the logs. Scheduled tasks are switched off, not deleted. Your account, presets and settings are kept, and existing StartOS backups are not touched. This cannot be undone.",
+      {
+        location:
+          (await store.read((s) => s.nextexplorerLocation).const(effects)) ??
+          destinations.nextexplorer.defaultLocation,
+      },
     ),
     allowedStatuses: 'only-stopped',
     group: null,
@@ -54,8 +60,8 @@ export const clearHistory = sdk.Action.withoutInput(
 
   // execution
   async ({ effects }) => {
-    // Only file managers that are installed. Never mount a volume that is not
-    // there: StartOS 0.4.0.1 creates a missing one on mount.
+    // Only file managers that are installed: StartOS refuses to mount the
+    // volume of one that isn't.
     const installed = new Set(await effects.getInstalledPackages())
     const candidates = remotes.filter((d) =>
       installed.has(destinations[d].packageId),
@@ -63,7 +69,13 @@ export const clearHistory = sdk.Action.withoutInput(
 
     // Which of them hold YTPTube's folder. Look with the whole volume mounted
     // read-only: mounting the folder itself read-write creates it where it is
-    // missing, which in NextExplorer would add an empty YTPTube drive.
+    // missing, which in NextExplorer would add an empty location.
+    const subpaths = {
+      filebrowser: destinations.filebrowser.subpath,
+      nextexplorer:
+        (await store.read((s) => s.nextexplorerLocation).once()) ??
+        destinations.nextexplorer.defaultLocation,
+    }
     let probeMounts = sdk.Mounts.of()
     if (candidates.includes('filebrowser'))
       probeMounts = probeMounts.mountDependency<typeof filebrowserManifest>({
@@ -91,7 +103,7 @@ export const clearHistory = sdk.Action.withoutInput(
           async (sub) => {
             const found: RemoteDestination[] = []
             for (const d of candidates) {
-              const dir = `/probe/${d}/${destinations[d].subpath}`
+              const dir = `/probe/${d}/${subpaths[d]}`
               if ((await sub.exec(['test', '-d', dir])).exitCode === 0)
                 found.push(d)
             }
@@ -118,7 +130,7 @@ export const clearHistory = sdk.Action.withoutInput(
       mounts = mounts.mountDependency<typeof filebrowserManifest>({
         dependencyId: 'filebrowser',
         volumeId: 'data',
-        subpath: destinations.filebrowser.subpath,
+        subpath: subpaths.filebrowser,
         mountpoint: destinations.filebrowser.mountpoint,
         readonly: false,
       })
@@ -126,7 +138,7 @@ export const clearHistory = sdk.Action.withoutInput(
       mounts = mounts.mountDependency<typeof nextexplorerManifest>({
         dependencyId: 'nextexplorer',
         volumeId: 'data',
-        subpath: destinations.nextexplorer.subpath,
+        subpath: subpaths.nextexplorer,
         mountpoint: destinations.nextexplorer.mountpoint,
         readonly: false,
       })
@@ -144,21 +156,19 @@ export const clearHistory = sdk.Action.withoutInput(
         let files = 0
         let bytes = 0
         for (const { path } of folders) {
-          const sizes = await sub.execFail([
-            'find',
-            path,
-            '-type',
-            'f',
-            '-printf',
-            '%s\\n',
-          ])
+          const sizes = await sub.execFail(
+            ['find', path, '-type', 'f', '-printf', '%s\\n'],
+            { timeout: null },
+          )
           for (const line of String(sizes.stdout).split('\n')) {
             if (!line.trim()) continue
             files += 1
             bytes += Number(line) || 0
           }
           // Everything inside the folder; the folder itself stays.
-          await sub.execFail(['find', path, '-mindepth', '1', '-delete'])
+          await sub.execFail(['find', path, '-mindepth', '1', '-delete'], {
+            timeout: null,
+          })
         }
 
         let entries = 0
@@ -167,7 +177,10 @@ export const clearHistory = sdk.Action.withoutInput(
           const sqlite = (sql: string) =>
             // As the image's own user, so the database's side files stay
             // owned by the account the daemon runs as.
-            sub.execFail(['sqlite3', '-bail', dbFile, sql], { user: 'app' })
+            sub.execFail(['sqlite3', '-bail', dbFile, sql], {
+              user: 'app',
+              timeout: null,
+            })
           const counts = await sqlite(
             'select count(*) from history; select count(*) from tasks where enabled = 1;',
           )
@@ -184,13 +197,10 @@ export const clearHistory = sdk.Action.withoutInput(
 
         await sub.execFail(['rm', '-f', '/config/archive.log'])
         if ((await sub.exec(['test', '-d', '/config/logs'])).exitCode === 0)
-          await sub.execFail([
-            'find',
-            '/config/logs',
-            '-mindepth',
-            '1',
-            '-delete',
-          ])
+          await sub.execFail(
+            ['find', '/config/logs', '-mindepth', '1', '-delete'],
+            { timeout: null },
+          )
 
         return { files, bytes, entries, tasks }
       },
