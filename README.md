@@ -9,7 +9,7 @@
 > upstream documentation is accurate and fully applicable — see the
 > Documentation section of `instructions.md` for links.
 
-[YTPTube](https://github.com/arabcoders/ytptube) is a self-hosted web interface for yt-dlp: queued and concurrent downloads of video and audio from YouTube and many other sites, with scheduling, presets, and notifications. This package runs the upstream image unmodified, turns on its login, and can save downloads into File Browser or NextExplorer.
+[YTPTube](https://github.com/arabcoders/ytptube) is a self-hosted web interface for yt-dlp: queued and concurrent downloads of video and audio from YouTube and many other sites, with scheduling, presets, and notifications. This package runs the upstream image with updated CA stores, turns on its login, and can save downloads into File Browser or NextExplorer.
 
 ---
 
@@ -32,11 +32,11 @@
 
 ## Image and Container Runtime
 
-The package runs upstream's published image as-is, in one subcontainer that hosts two cooperating processes.
+The package runs upstream's published image in one subcontainer that hosts two cooperating processes. The root `Dockerfile` is a temporary layer over it: it upgrades the system CA bundle and Python's certifi so neither trusts the compromised emSign ECC Root CA - G3 (eMudhra), and sets `DENO_TLS_CA_STORE=system` so the PO-token server uses that bundle instead of Deno's built-in roots. It comes out once upstream ships an image built on fixed stores.
 
 | Property      | Value                                              |
 | ------------- | -------------------------------------------------- |
-| Image         | `ghcr.io/arabcoders/ytptube` (upstream, unmodified) |
+| Image         | `ghcr.io/arabcoders/ytptube` + `Dockerfile` (CA store fix) |
 | Architectures | x86_64, aarch64                                    |
 | Entrypoint    | Image default                                      |
 
@@ -243,7 +243,7 @@ A restored instance needs nothing further before use. If its destination service
 
 ```yaml
 package_id: ytptube
-image: ghcr.io/arabcoders/ytptube
+image: ghcr.io/arabcoders/ytptube # CA stores upgraded by Dockerfile
 architectures: [x86_64, aarch64]
 subcontainers: [ytptube-sub, reset-password, ytdlp-reset, clear-history-probe, clear-history]
 volumes:
