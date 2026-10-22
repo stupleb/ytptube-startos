@@ -1,21 +1,32 @@
 import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
+import { sdk } from '../sdk'
+import { configMounts } from '../utils'
 
 export const current = VersionInfo.of({
-  version: '2.7.5:0',
+  version: '2.7.5:1',
   releaseNotes: {
     en_US:
-      'Updated YTPTube to 2.7.5, with a reworked video player and downloads of DRM-protected media through your own Widevine key server. [Full release notes](https://github.com/arabcoders/ytptube/releases/tag/v2.7.5)',
+      'Stops trusting certificates from a compromised certificate authority (eMudhra).',
     es_ES:
-      'YTPTube actualizado a 2.7.5, con un reproductor de vídeo renovado y descargas de contenido protegido con DRM a través de tu propio servidor de claves Widevine. [Notas completas de la versión](https://github.com/arabcoders/ytptube/releases/tag/v2.7.5)',
+      'Deja de confiar en los certificados de una autoridad de certificación comprometida (eMudhra).',
     de_DE:
-      'YTPTube auf 2.7.5 aktualisiert, mit überarbeitetem Videoplayer und Downloads DRM-geschützter Medien über deinen eigenen Widevine-Schlüsselserver. [Vollständige Versionshinweise](https://github.com/arabcoders/ytptube/releases/tag/v2.7.5)',
+      'Vertraut Zertifikaten einer kompromittierten Zertifizierungsstelle (eMudhra) nicht mehr.',
     pl_PL:
-      'Zaktualizowano YTPTube do 2.7.5: odnowiony odtwarzacz wideo oraz pobieranie multimediów chronionych DRM przez własny serwer kluczy Widevine. [Pełne informacje o wydaniu](https://github.com/arabcoders/ytptube/releases/tag/v2.7.5)',
-    fr_FR:
-      'YTPTube mis à jour vers 2.7.5, avec un lecteur vidéo repensé et le téléchargement de médias protégés par DRM via votre propre serveur de clés Widevine. [Notes de version complètes](https://github.com/arabcoders/ytptube/releases/tag/v2.7.5)',
+      'Przestaje ufać certyfikatom przejętego urzędu certyfikacji (eMudhra).',
+    fr_FR: `Ne fait plus confiance aux certificats d'une autorité de certification compromise (eMudhra).`,
   },
   migrations: {
-    up: async ({ effects }) => {},
+    // yt-dlp's upgrader installs its own certifi into /config, ahead of the image's; this makes it reinstall.
+    up: async ({ effects }) => {
+      await sdk.SubContainer.withTemp(
+        effects,
+        { imageId: 'ytptube' },
+        configMounts,
+        'ytdlp-reset',
+        (sub) =>
+          sub.execFail(['sh', '-c', 'rm -f /config/python*-packages/.version']),
+      )
+    },
     down: IMPOSSIBLE,
   },
 })

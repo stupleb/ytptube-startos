@@ -10,7 +10,7 @@ Fetch the latest release tag:
 gh release view -R arabcoders/ytptube --json tagName -q .tagName
 ```
 
-The current pin lives in `startos/manifest/index.ts` at `images.ytptube.source.dockerTag` (the tag after the `:` in `ghcr.io/arabcoders/ytptube:<tag>`). Upstream image tags keep the leading `v`.
+The current pin lives in `startos/manifest/index.ts` at `images.ytptube.source.dockerBuild.buildArgs.IMAGE` (the tag after the `:` in `ghcr.io/arabcoders/ytptube:<tag>`), which the root `Dockerfile` builds on to replace CA stores that still trust emSign ECC Root CA - G3. Upstream image tags keep the leading `v`.
 
 Confirm the new tag is published for both architectures before pinning it:
 
@@ -40,7 +40,7 @@ Read the diff of any of these, because this package depends on them:
 
 ## Applying the bump
 
-1. Set `dockerTag` in `startos/manifest/index.ts` to `ghcr.io/arabcoders/ytptube:<new tag>`.
+1. Set the `IMAGE` build arg in `startos/manifest/index.ts` to `ghcr.io/arabcoders/ytptube:<new tag>`. Keep the `Dockerfile` layer until the new image no longer trusts emSign ECC Root CA - G3: `ca-certificates` at `20250419+deb13u1` or later, certifi 2026.10.19 or later, and Deno 2.9.8 or later. Then delete the `Dockerfile`, put `source: { dockerTag: '<new image>' }` back, and remove the README's layer lines.
 2. Bump the version in `startos/versions/current.ts`, which always holds the latest version and
    exports `current`. With no migration, edit it in place — update `version` (`<upstream>:0`) and
    `releaseNotes` in every locale; `startos/versions/index.ts` needs no change. A *separate* version
