@@ -3,20 +3,16 @@ import { sdk } from '../sdk'
 import { configMounts } from '../utils'
 
 export const current = VersionInfo.of({
-  version: '2.7.5:1',
+  version: '2.7.5:2',
   releaseNotes: {
-    en_US:
-      'Stops trusting certificates from a compromised certificate authority (eMudhra).',
-    es_ES:
-      'Deja de confiar en los certificados de una autoridad de certificación comprometida (eMudhra).',
-    de_DE:
-      'Vertraut Zertifikaten einer kompromittierten Zertifizierungsstelle (eMudhra) nicht mehr.',
-    pl_PL:
-      'Przestaje ufać certyfikatom przejętego urzędu certyfikacji (eMudhra).',
-    fr_FR: `Ne fait plus confiance aux certificats d'une autorité de certification compromise (eMudhra).`,
+    en_US: 'Includes the Brotli security fix (CVE-2026-111497).',
+    es_ES: 'Incluye la corrección de seguridad de Brotli (CVE-2026-111497).',
+    de_DE: 'Enthält die Brotli-Sicherheitskorrektur (CVE-2026-111497).',
+    pl_PL: 'Zawiera poprawkę bezpieczeństwa Brotli (CVE-2026-111497).',
+    fr_FR: 'Inclut le correctif de sécurité de Brotli (CVE-2026-111497).',
   },
   migrations: {
-    // yt-dlp's upgrader installs its own certifi into /config, ahead of the image's; this makes it reinstall.
+    // yt-dlp's upgrader installs its own Brotli into /config, ahead of the image's; this makes it reinstall.
     up: async ({ effects }) => {
       await sdk.SubContainer.withTemp(
         effects,
