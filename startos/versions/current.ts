@@ -1,28 +1,21 @@
 import { IMPOSSIBLE, VersionInfo } from '@start9labs/start-sdk'
-import { sdk } from '../sdk'
-import { configMounts } from '../utils'
 
 export const current = VersionInfo.of({
-  version: '2.7.5:2',
+  version: '2.7.6:0',
   releaseNotes: {
-    en_US: 'Includes the Brotli security fix (CVE-2026-111497).',
-    es_ES: 'Incluye la corrección de seguridad de Brotli (CVE-2026-111497).',
-    de_DE: 'Enthält die Brotli-Sicherheitskorrektur (CVE-2026-111497).',
-    pl_PL: 'Zawiera poprawkę bezpieczeństwa Brotli (CVE-2026-111497).',
-    fr_FR: 'Inclut le correctif de sécurité de Brotli (CVE-2026-111497).',
+    en_US:
+      'Updated YTPTube to 2.7.6. Includes the Brotli security fix (CVE-2026-111497) for sites that need browser impersonation.',
+    es_ES:
+      'YTPTube actualizado a 2.7.6. Incluye la corrección de seguridad de Brotli (CVE-2026-111497) para los sitios que requieren suplantar un navegador.',
+    de_DE:
+      'YTPTube auf 2.7.6 aktualisiert. Enthält die Brotli-Sicherheitskorrektur (CVE-2026-111497) für Seiten, die eine Browser-Imitation erfordern.',
+    pl_PL:
+      'Zaktualizowano YTPTube do 2.7.6. Zawiera poprawkę bezpieczeństwa Brotli (CVE-2026-111497) dla stron wymagających podszywania się pod przeglądarkę.',
+    fr_FR:
+      'YTPTube mis à jour vers 2.7.6. Inclut le correctif de sécurité de Brotli (CVE-2026-111497) pour les sites qui nécessitent l’imitation d’un navigateur.',
   },
   migrations: {
-    // yt-dlp's upgrader installs its own Brotli into /config, ahead of the image's; this makes it reinstall.
-    up: async ({ effects }) => {
-      await sdk.SubContainer.withTemp(
-        effects,
-        { imageId: 'ytptube' },
-        configMounts,
-        'ytdlp-reset',
-        (sub) =>
-          sub.execFail(['sh', '-c', 'rm -f /config/python*-packages/.version']),
-      )
-    },
+    up: async ({ effects }) => {},
     down: IMPOSSIBLE,
   },
 })
