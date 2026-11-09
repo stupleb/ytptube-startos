@@ -25,9 +25,9 @@ const formatSize = (bytes: number) =>
 // Emergency wipe: every file YTPTube has downloaded, wherever it went, plus
 // everything that records what was downloaded: the history, the download
 // archive (every built-in preset passes --download-archive, so it lists each
-// video) and the logs. Scheduled tasks are switched off rather than deleted:
-// with the archive gone, a task left on would download everything it covers
-// again on its next run. The account, presets, conditions and notifications
+// video), the Toolbox's jobs and the logs. Scheduled tasks are switched off
+// rather than deleted: with the archive gone, a task left on would download
+// everything it covers again on its next run. The account, presets, conditions and notifications
 // are kept.
 //
 // It runs with YTPTube stopped, so nothing holds the database or writes new
@@ -182,16 +182,17 @@ export const clearHistory = sdk.Action.withoutInput(
               timeout: null,
             })
           const counts = await sqlite(
-            'select count(*) from history; select count(*) from tasks where enabled = 1;',
+            "select count(*) from history; select count(*) from tasks where enabled = 1; select count(*) from sqlite_master where type = 'table' and name = 'toolbox_jobs';",
           )
-          ;[entries, tasks] = String(counts.stdout)
+          let toolbox = 0
+          ;[entries, tasks, toolbox] = String(counts.stdout)
             .trim()
             .split('\n')
             .map((n) => Number(n) || 0)
           // VACUUM rewrites the file, so the deleted rows do not linger in
           // free pages.
           await sqlite(
-            'delete from history; update tasks set enabled = 0 where enabled = 1; vacuum;',
+            `delete from history; ${toolbox ? 'delete from toolbox_jobs; ' : ''}update tasks set enabled = 0 where enabled = 1; vacuum;`,
           )
         }
 

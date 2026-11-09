@@ -15,7 +15,7 @@ export const manifest = setupManifest({
     ytptube: {
       source: {
         dockerBuild: {
-          buildArgs: { IMAGE: 'ghcr.io/arabcoders/ytptube:v2.7.6' },
+          buildArgs: { IMAGE: 'ghcr.io/arabcoders/ytptube:v2.7.7' },
         },
       },
       arch: ['x86_64', 'aarch64'],
