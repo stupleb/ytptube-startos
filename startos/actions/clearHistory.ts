@@ -1,5 +1,5 @@
-import { manifest as filebrowserManifest } from 'filebrowser-startos/startos/manifest'
-import { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
+import type { manifest as filebrowserManifest } from 'filebrowser-startos/startos/manifest'
+import type { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
 import { destinations, RemoteDestination } from '../destinations'
 import { store } from '../fileModels/store.json'
 import { i18n } from '../i18n'
