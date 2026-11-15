@@ -2,7 +2,10 @@
 
 ## Documentation
 
-- [YTPTube README](https://github.com/arabcoders/ytptube/blob/master/README.md) — the upstream README for the application this package runs.
+- [YTPTube README](https://github.com/arabcoders/ytptube/blob/master/README.md) — what YTPTube does and how to use it.
+- [Features](https://github.com/arabcoders/ytptube/blob/master/docs/features.md) — downloads, scheduled tasks, presets, conditions and media-server output.
+- [Task Definitions](https://github.com/arabcoders/ytptube/blob/master/docs/task-definitions.md) — rules for following sites that have no feed.
+- [Media Handlers](https://github.com/arabcoders/ytptube/blob/master/docs/media-handlers.md) — downloading protected media you are entitled to.
 
 ## What you get on StartOS
 
@@ -12,10 +15,10 @@
 
 ## Signing in
 
-A random password is generated for YTPTube's **admin** account when you install it.
+YTPTube can't start until it has an admin password.
 
-1. Run the **Reset Admin Password** action (a prompt on YTPTube's **Dashboard** tab links to it). It generates a fresh password and shows it with the username, `admin`.
-2. Use them on YTPTube's sign-in page.
+1. Run the **Reset Admin Password** action (a prompt on YTPTube's **Dashboard** tab links to it). It generates a password and shows it with the username, `admin`. Save them somewhere safe.
+2. Start YTPTube and use them on its sign-in page.
 
 Run **Reset Admin Password** again any time to roll a new password. It works immediately, and everyone who is signed in is signed out.
 
@@ -59,6 +62,10 @@ NextExplorer's admin account sees the location straight away. To let another Nex
 This is an either/or choice: while a file manager is selected, it is the *only* place downloads go. Switch back any time by choosing **Local Storage** — files already saved stay where they are.
 
 If the file manager you chose is uninstalled, YTPTube saves downloads inside itself instead and shows a prompt on its **Dashboard** tab until you reinstall it or choose another destination.
+
+## Keeping your home IP private
+
+YTPTube connects to YouTube and every other site you download from, and those sites see your server's IP address. If you publish YTPTube through a tunnel to keep your home IP private, send its outbound traffic through that tunnel too. If you use the tunnel for another reason, such as a port your router can't forward, there is nothing to change.
 
 ## Adjusting how downloads run
 

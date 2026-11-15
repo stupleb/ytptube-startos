@@ -62,6 +62,7 @@ export default {
     57: 'No puede empezar por un punto ni contener una barra',
     58: 'Instala NextExplorer primero.',
     59: 'Actualiza NextExplorer a la versión 3.1.0:2 o posterior primero.',
+    60: 'Sustituye la contraseña de administrador actual. Se cerrará la sesión de todos los que hayan iniciado sesión en YTPTube.',
   },
   de_DE: {
     0: 'Starte YTPTube!',
@@ -124,6 +125,7 @@ export default {
     57: 'Darf nicht mit einem Punkt beginnen oder einen Schrägstrich enthalten',
     58: 'Installiere zuerst NextExplorer.',
     59: 'Aktualisiere NextExplorer zuerst auf 3.1.0:2 oder neuer.',
+    60: 'Ersetzt das aktuelle Admin-Passwort. Alle, die in YTPTube angemeldet sind, werden abgemeldet.',
   },
   pl_PL: {
     0: 'Uruchamianie YTPTube!',
@@ -186,6 +188,7 @@ export default {
     57: 'Nie może zaczynać się od kropki ani zawierać ukośnika',
     58: 'Najpierw zainstaluj NextExplorer.',
     59: 'Najpierw zaktualizuj NextExplorer do wersji 3.1.0:2 lub nowszej.',
+    60: 'Zastępuje obecne hasło administratora. Wszyscy zalogowani do YTPTube zostaną wylogowani.',
   },
   fr_FR: {
     0: 'Démarrage de YTPTube !',
@@ -248,5 +251,6 @@ export default {
     57: 'Ne peut pas commencer par un point ni contenir de barre oblique',
     58: 'Installez d’abord NextExplorer.',
     59: 'Mettez d’abord NextExplorer à jour vers la version 3.1.0:2 ou ultérieure.',
+    60: 'Remplace le mot de passe administrateur actuel. Toutes les personnes connectées à YTPTube sont déconnectées.',
   },
 } satisfies Record<string, LangDict>

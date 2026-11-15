@@ -78,6 +78,7 @@ const dict = {
   'Cannot start with a dot or contain a slash': 57,
   'Install NextExplorer first.': 58,
   'Update NextExplorer to 3.1.0:2 or later first.': 59,
+  'Replaces the current admin password. Everyone signed in to YTPTube is signed out.': 60,
 } as const
 
 /**

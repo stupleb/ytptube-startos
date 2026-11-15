@@ -4,9 +4,6 @@ import { sdk } from '../sdk'
 import { i18n } from '../i18n'
 import { authUsername, configMounts, dbFile } from '../utils'
 
-export const newPassword = () =>
-  utils.getDefaultString({ charset: 'a-z,A-Z,0-9', len: 32 })
-
 // Reads back the one account YTPTube holds. It is seeded with `authUsername`,
 // but the user can rename it in the app, and the reset script matches on name.
 const readUsername = `import sqlite3;r=sqlite3.connect(${JSON.stringify(
@@ -23,7 +20,11 @@ export const resetAdminPassword = sdk.Action.withoutInput(
   async ({ effects }) => ({
     name: i18n('Reset Admin Password'),
     description: i18n('Generate a new random admin password and display it'),
-    warning: null,
+    warning: (await store.read((s) => s.adminPassword).const(effects))
+      ? i18n(
+          'Replaces the current admin password. Everyone signed in to YTPTube is signed out.',
+        )
+      : null,
     allowedStatuses: 'any',
     group: null,
     visibility: 'enabled',
@@ -31,13 +32,13 @@ export const resetAdminPassword = sdk.Action.withoutInput(
 
   // execution
   async ({ effects }) => {
-    const adminPassword = newPassword()
+    const adminPassword = utils.getDefaultString({
+      charset: 'a-z,A-Z,0-9',
+      len: 32,
+    })
 
-    // Since 2.7.0 YTPTube keeps the account in its own database and seeds it
-    // from YTP_AUTH_* only while the users table is empty, so rewriting that
-    // env var no longer changes the login. Reset the stored account directly,
-    // with upstream's own script — which also revokes every active session, so
-    // signed-in browsers are signed out. API keys are left alone.
+    // YTPTube seeds its account from YTP_AUTH_* only while its users table is
+    // empty, so an existing account is reset with upstream's own script.
     const username = await sdk.SubContainer.withTemp(
       effects,
       { imageId: 'ytptube' },

@@ -1,7 +1,7 @@
 {
   "name": "ytptube-startos",
   "dependencies": {
-    "@start9labs/start-sdk": "4.0.0",
+    "@start9labs/start-sdk": "4.1.0",
     "filebrowser-startos": "github:Start9Labs/filebrowser-startos#next",
     "nextexplorer-startos": "github:Start9Labs/nextexplorer-startos#next"
   },

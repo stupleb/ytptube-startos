@@ -1,5 +1,5 @@
-import { manifest as filebrowserManifest } from 'filebrowser-startos/startos/manifest'
-import { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
+import type { manifest as filebrowserManifest } from 'filebrowser-startos/startos/manifest'
+import type { manifest as nextexplorerManifest } from 'nextexplorer-startos/startos/manifest'
 import {
   Destination,
   destinations,
@@ -214,7 +214,7 @@ export const main = sdk.setupMain(async ({ effects }) => {
       //   - BROWSER_CONTROL_ENABLED: rename/delete/move/mkdir in the built-in
       //     file manager (off upstream by default).
       //   - CHECK_FOR_UPDATES off: StartOS manages package updates.
-      //   - AUTH_*: credentials generated on install (see init/watchAuth.ts).
+      //   - AUTH_*: the password Reset Admin Password stored, which seeds the account on first boot.
       // Note: the in-app terminal (YTP_CONSOLE_ENABLED) is intentionally left
       // off — it executes commands and is a remote-exec surface.
       exec: {

@@ -86,7 +86,7 @@ The package keeps one file of its own and configures YTPTube through environment
 
 **`store.json`** (JSON, `startos` volume):
 
-- `adminPassword` — generated at install; rewritten only by Reset Admin Password. It is passed to YTPTube as `YTP_AUTH_PASSWORD`, which YTPTube reads **only while it has no account yet** (see below). After the first boot the database owns the password, so this copy goes stale if the user changes the password inside YTPTube. Reset Admin Password brings the two back into step.
+- `adminPassword` — generated and rewritten only by Reset Admin Password; absent until it first runs. It is passed to YTPTube as `YTP_AUTH_PASSWORD`, which YTPTube reads **only while it has no account yet** (see below). After the first boot the database owns the password, so this copy goes stale if the user changes the password inside YTPTube. Reset Admin Password brings the two back into step.
 - `downloadDestination` — `local`, `filebrowser` or `nextexplorer`, written by Select Download Destination; read on every start to pick the mounts and the dependency. It is the user's choice and is never rewritten by the fallback described under [Volume and Data Layout](#volume-and-data-layout).
 - `nextexplorerLocation` — the NextExplorer location to save into, written by Select Download Destination when NextExplorer is chosen. Absent means `YTPTube`, the location every earlier version used. It is kept while another destination is selected.
 - `maxWorkers`, `maxWorkersPerExtractor`, `retry`, `autoClearHistoryDays`, `removeFiles` — written by Download Settings. `ytdlpVersion` (`stable`, `nightly`, or a release number) and `ytdlpDebug` — written by yt-dlp Settings. All are absent until their action is first saved, and while absent YTPTube's own defaults apply. They belong to the user; the package only reads them, on every start.
@@ -126,7 +126,7 @@ YTPTube depends on nothing unless File Browser or NextExplorer is chosen as the 
 | File Browser | Only while it is the destination  | None — it must be installed, not running | `ytptube-downloads` from its `data` volume at `/mnt/filebrowser/ytptube-downloads`, read-write |
 | NextExplorer | Only while it is the destination  | None — it must be installed, not running | The chosen location from its `data` volume at `/mnt/nextexplorer/YTPTube`, read-write |
 
-Each is needed only as a place to put files, so it can be stopped while YTPTube runs. Either package that ships under the `filebrowser` id satisfies the File Browser dependency — the original File Browser or its successor, FileBrowser Quantum. All three expose a `data` volume and run as uid 1000, which the shared-ownership scheme above relies on. NextExplorer must be 3.1.0:2 or later, the first release that lets another service run its Add Location action.
+Each is needed only as a place to put files, so it can be stopped while YTPTube runs. Either package that ships under the `filebrowser` id satisfies the File Browser dependency — the original File Browser or its successor, FileBrowser Quantum. All three expose a `data` volume and run as uid 1000, which the shared-ownership scheme above relies on. NextExplorer must be a release that lets another service run its Add Location action.
 
 ---
 
@@ -146,7 +146,7 @@ The token server's port 4416 is used only inside the container and is not an int
 
 Upstream ships with no login; this package turns it on before the first boot, so there is no window in which the UI is open.
 
-At install, the init step generates a random password into `store.json` and raises the task described under [Tasks](#tasks). On first start the `setup` oneshot fixes ownership, and YTPTube creates its single account from the injected credentials — username `admin` — so its first-run setup screen never appears. The user gets a password they can read by running Reset Admin Password; the generated one is never shown.
+At install, the package raises a critical task (see [Tasks](#tasks)), so YTPTube cannot start until the user runs Reset Admin Password, which generates the password, stores it in `store.json` and shows it. On first start the `setup` oneshot fixes ownership, and YTPTube creates its single account from the injected credentials — username `admin` — so its first-run setup screen never appears.
 
 ---
 
@@ -154,7 +154,7 @@ At install, the init step generates a random password into `store.json` and rais
 
 One action recovers access to the account and one chooses where downloads go; two tune YTPTube, and one erases everything it has downloaded.
 
-**Reset Admin Password** — run it to get a password on first install, or to recover access at any time, including after the password or username was changed inside YTPTube.
+**Reset Admin Password** — run it to set the password on first install, which the critical task asks for, or to recover access at any time, including after the password or username was changed inside YTPTube. Once a password is stored, it asks for confirmation first.
 
 - *Changes:* resets the password of YTPTube's single account in `ytptube.db`, finding the account by its current name, which the user may have changed; revokes every active session, so all signed-in browsers are signed out; stores the new password in `store.json`. API keys are left alone. If the database doesn't exist yet (the service has never started), only `store.json` changes, and the account is created with that password on first boot.
 - *Cost:* a few seconds; the change to `store.json` restarts the daemon, interrupting downloads in progress.
@@ -163,7 +163,7 @@ One action recovers access to the account and one chooses where downloads go; tw
 
 **Select Download Destination** — choose Local Storage, File Browser, or NextExplorer, and for NextExplorer the location to save into. Also the way to point YTPTube at its location after it was renamed in NextExplorer, and the target of the prompt raised while the chosen service is not installed.
 
-- *Changes:* `downloadDestination`, and for NextExplorer `nextexplorerLocation`, in `store.json`, which changes the mounts and which service, if any, is declared as a dependency. For NextExplorer it first runs NextExplorer's Add Location action for the name, after declaring NextExplorer as a dependency for the call. That creates the location owned by uid 1000, or accepts it if it exists; NextExplorer's naming rules apply, and a name it rejects leaves the previous choice in place. It refuses NextExplorer while NextExplorer is not installed or older than 3.1.0:2. Existing downloads are not moved, and downloads still queued keep the path they were queued with, so they fail once it is no longer mounted.
+- *Changes:* `downloadDestination`, and for NextExplorer `nextexplorerLocation`, in `store.json`, which changes the mounts and which service, if any, is declared as a dependency. For NextExplorer it first runs NextExplorer's Add Location action for the name, after declaring NextExplorer as a dependency for the call. That creates the location owned by uid 1000, or accepts it if it exists; NextExplorer's naming rules apply, and a name it rejects leaves the previous choice in place. It refuses NextExplorer while NextExplorer is not installed or too old to offer that action. Existing downloads are not moved, and downloads still queued keep the path they were queued with, so they fail once it is no longer mounted.
 - *Cost:* the daemon restarts to apply it.
 - *Repeat safety:* idempotent.
 
@@ -191,11 +191,11 @@ One action recovers access to the account and one chooses where downloads go; tw
 
 ## Tasks
 
-The package raises at most two tasks, and neither blocks the service from starting.
+The package raises at most two tasks. The password task blocks the service from starting until it is cleared; the destination task never does.
 
 | Task | Raised when | Severity | Cleared by |
 | ---- | ----------- | -------- | ---------- |
-| Set your YTPTube admin password | Install — no password has been stored yet | important | Running Reset Admin Password |
+| Set your YTPTube admin password | No password is stored: a fresh install, before Reset Admin Password first runs | critical | Running Reset Admin Password |
 | *File Browser / NextExplorer is not installed, so downloads are going to Local Storage* | The chosen destination's service is not installed | important | That service being installed again, or choosing another destination with Select Download Destination |
 
 The password task does not return once cleared, because a password stays stored from then on. The destination task comes back whenever the chosen service is uninstalled.
@@ -270,7 +270,7 @@ user_settings_env_vars: # only once set by an action
   - YTP_YTDLP_VERSION
   - YTP_YTDLP_DEBUG
   - YTP_LOG_LEVEL # debug, with YTP_YTDLP_DEBUG
-dependencies: [filebrowser, nextexplorer] # optional; only the chosen destination's; nextexplorer >=3.1.0:2
+dependencies: [filebrowser, nextexplorer] # optional; only the chosen destination's
 interfaces:
   ui: { type: ui, port: 8081 }
 actions:
@@ -280,7 +280,7 @@ actions:
   - ytdlp-settings
   - clear-history
 tasks:
-  - { action: reset-admin-password, severity: important }
+  - { action: reset-admin-password, severity: critical }
   - { action: download-destination, severity: important } # while the chosen destination is not installed
 health_checks:
   - primary
