@@ -43,7 +43,7 @@ Read the diff of any of these, because this package depends on them:
 1. Set the `IMAGE` build arg in `startos/manifest/index.ts` to `ghcr.io/arabcoders/ytptube:<new tag>`. Keep the `Dockerfile` layer until the new image ships Deno 2.9.8 or later and curl_cffi 0.17.0 or later in `/opt/python`, and its system bundle still has no emSign ECC Root CA - G3. A curl_cffi newer than yt-dlp supports disables impersonation, so check yt-dlp's range in `yt_dlp/networking/_curlcffi.py` before raising the floor. Then delete the `Dockerfile`, put `source: { dockerTag: '<new image>' }` back, and remove the README's layer lines.
 2. Bump the version in `startos/versions/current.ts`, which always holds the latest version and
    exports `current`. With no migration, edit it in place — update `version` (`<upstream>:0`) and
-   `releaseNotes` in every locale; `startos/versions/index.ts` needs no change. A *separate* version
+   `releaseNotes` in every locale; `startos/versions/index.ts` needs no change. A _separate_ version
    file (added to `other`) is only needed when the bump carries an `up`/`down` migration; a version
    having merely been released is not a reason to declare one, since `VersionGraph` synthesizes a
    range vertex beneath `current` so any lower installed version migrates up in one hop. See the

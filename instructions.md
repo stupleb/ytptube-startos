@@ -26,7 +26,7 @@ Run **Reset Admin Password** again any time to roll a new password. It works imm
 
 Once you're signed in, YTPTube looks after the account itself: from its settings you can change your username and password, see which devices are signed in and sign them out one by one, and create API keys for other tools.
 
-If you change your password inside YTPTube, the one StartOS last showed you stops working. If you lose it, **Reset Admin Password** always gets you back in.
+If you change your password inside YTPTube, the one StartOS last showed you stops working. If you lose it, **Reset Admin Password** always gets you back in. The steps behind the sign-in page's **Forgot password?** link need shell access to the server; use the action instead.
 
 ## Getting set up
 
@@ -59,7 +59,7 @@ NextExplorer's admin account sees the location straight away. To let another Nex
 
 ### Either way
 
-This is an either/or choice: while a file manager is selected, it is the *only* place downloads go. Switch back any time by choosing **Local Storage** — files already saved stay where they are.
+This is an either/or choice: while a file manager is selected, it is the _only_ place downloads go. Switch back any time by choosing **Local Storage** — files already saved stay where they are.
 
 If the file manager you chose is uninstalled, YTPTube saves downloads inside itself instead and shows a prompt on its **Dashboard** tab until you reinstall it or choose another destination.
 
