@@ -32,13 +32,13 @@
 
 ## Image and Container Runtime
 
-The package runs upstream's published image in one subcontainer that hosts two cooperating processes. The root `Dockerfile` is a temporary layer over it: it sets `DENO_TLS_CA_STORE=system` so the PO-token server uses the system CA bundle instead of Deno's built-in roots, which still trust the compromised emSign ECC Root CA - G3 (eMudhra), and upgrades curl_cffi, which yt-dlp uses for sites that need browser impersonation, to a release whose bundled Brotli has the fix for CVE-2026-111497. It comes out once upstream ships an image with fixed versions of both.
+The package runs upstream's published image in one subcontainer that hosts two cooperating processes. The root `Dockerfile` is a temporary layer over it: it sets `DENO_TLS_CA_STORE=system` so the PO-token server uses the system CA bundle instead of Deno's built-in roots, which still trust the compromised emSign ECC Root CA - G3 (eMudhra). It comes out once upstream ships an image with a fixed Deno.
 
-| Property      | Value                                                                      |
-| ------------- | -------------------------------------------------------------------------- |
-| Image         | `ghcr.io/arabcoders/ytptube` + `Dockerfile` (Deno CA store, curl_cffi fix) |
-| Architectures | x86_64, aarch64                                                            |
-| Entrypoint    | Image default                                                              |
+| Property      | Value                                                       |
+| ------------- | ----------------------------------------------------------- |
+| Image         | `ghcr.io/arabcoders/ytptube` + `Dockerfile` (Deno CA store) |
+| Architectures | x86_64, aarch64                                             |
+| Entrypoint    | Image default                                               |
 
 The image's entrypoint is `tini`, which runs a script that checks `/config` and the download path are writable, then starts **two processes side by side**: YTPTube itself (Python) and the bundled bgutil **YouTube PO-token server** (Deno, listening on port 4416 inside the container). yt-dlp asks that server for the proof-of-origin tokens YouTube requires for many videos. If either process exits, the script stops the other and exits, and StartOS restarts the daemon — so a crashed token server shows up as a brief restart, not as YouTube downloads quietly failing. The token server costs memory: measured at roughly 160 MB resident, somewhat more than YTPTube itself.
 
@@ -243,7 +243,7 @@ A restored instance needs nothing further before use. If its destination service
 
 ```yaml
 package_id: ytptube
-image: ghcr.io/arabcoders/ytptube # Dockerfile: Deno on the system CA store, curl_cffi upgraded
+image: ghcr.io/arabcoders/ytptube # Dockerfile: Deno on the system CA store
 architectures: [x86_64, aarch64]
 subcontainers:
   [ytptube-sub, reset-password, ytdlp-reset, clear-history-probe, clear-history]
