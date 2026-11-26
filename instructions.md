@@ -24,7 +24,7 @@ Run **Reset Admin Password** again any time to roll a new password. It works imm
 
 ## Managing your account
 
-Once you're signed in, YTPTube looks after the account itself: from its settings you can change your username and password, see which devices are signed in and sign them out one by one, and create API keys for other tools.
+Once you're signed in, YTPTube looks after the account itself: from its settings you can change your username and password, see which devices are signed in and sign them out one by one, and create API keys for other tools. An API key can do everything your account can, including running commands on your server through YTPTube's Toolbox and yt-dlp options, so keep keys as safe as your password.
 
 If you change your password inside YTPTube, the one StartOS last showed you stops working. If you lose it, **Reset Admin Password** always gets you back in. The steps behind the sign-in page's **Forgot password?** link need shell access to the server; use the action instead.
 
