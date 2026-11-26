@@ -27,8 +27,8 @@ const formatSize = (bytes: number) =>
 // archive (every built-in preset passes --download-archive, so it lists each
 // video), the Toolbox's jobs and the logs. Scheduled tasks are switched off
 // rather than deleted: with the archive gone, a task left on would download
-// everything it covers again on its next run. The account, presets, conditions and notifications
-// are kept.
+// everything it covers again on its next run. The account, presets, conditions, notifications
+// and Toolbox tools are kept.
 //
 // It runs with YTPTube stopped, so nothing holds the database or writes new
 // files while they are removed. It clears every destination, not only the
